@@ -71,3 +71,16 @@ Do not commit SSH keys, device credentials, `.env` files, real telemetry data, S
 ## Status
 
 The source was deployed and checked over Raspberry Pi Ethernet. Backend and frontend services were active and enabled at verification time; both HTTP endpoints and the M03 scenarios passed. A separate end-to-end test using a physical ESP32 and an independent phone client was **not** performed.
+
+
+## November 14, 2026 dashboard release
+
+The browser dashboard has been updated to follow the AstroVital X Figma design reference (overview layout, dark mission-control styling, four telemetry metrics, trend chart, HADSE and self-check sections). Existing backend integration, self-check submission, event history, sensor quality rules and the simulator remain available.
+
+The dashboard uses the browser hostname to locate the API on port `8000`, making the same build usable over a Raspberry Pi hotspot (`192.168.4.1`) or Ethernet (`192.168.10.1`). It explicitly labels unimplemented navigation, Earth link and environmental measurements as **DEMO**. No unsupported clinical or hardware capabilities are claimed.
+
+The API connectivity indicator is now resilient to transient polling failures. Requests are not overlapped, optional event history is fetched every six seconds, a failed optional endpoint cannot declare the API offline, and three consecutive fully failed polls are required before marking a previously connected API offline. Mission refresh delays retain last-known data and are indicated separately.
+
+Run `cd frontend && npm test && npm run build` to execute **16 frontend tests** and the production build (verified on November 14, 2026). The tested Raspberry Pi deployment uses prebuilt static frontend files; compiled assets, device credentials and runtime databases are not committed.
+
+**Validation scope:** The updated frontend was tested with a real Raspberry Pi API and simulated network-block scenarios. Physical ESP32 telemetry had been observed reaching the Pi, but that does not constitute medical validation, and pixel-perfect parity for every Figma page was not independently verified.

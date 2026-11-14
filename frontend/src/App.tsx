@@ -3,8 +3,9 @@ import {
   SCENARIOS, assessSample, ageSeconds, clockTime, createDemoSample, describeConfidenceReason, isLiveMeasured, mapApiTelemetry, nowStamp,
   type Assessment, type CheckStatus, type LogEvent, type Page, type Sample, type Scenario
 } from './domain';
+import { nextApiConnection } from './apiConnectivity';
 
-const API = import.meta.env.VITE_API_BASE || `${window.location.protocol}//${window.location.hostname}:8000`;
+const API = import.meta.env.VITE_API_BASE || window.location.protocol + '//' + window.location.hostname + ':8000';
 
 type ApiMission = {
   assessment: {
@@ -18,7 +19,7 @@ type ApiMission = {
 const NAV: { id: Page; label: string; icon: string; section: string }[] = [
   { id: 'overview', label: 'Genel Bakış', icon: 'grid', section: 'İZLEME' },
   { id: 'telemetry', label: 'Canlı Telemetri', icon: 'activity', section: 'İZLEME' },
-  { id: 'hadse', label: 'Sağlık Analizi', icon: 'pulse', section: 'İZLEME' },
+  { id: 'hadse', label: 'Sağlık Analizi ve HADSE', icon: 'pulse', section: 'İZLEME' },
   { id: 'selfcheck', label: 'Astronot Kontrolü', icon: 'clipboard', section: 'İZLEME' },
   { id: 'blackbox', label: 'Görev Kayıtları', icon: 'database', section: 'SİSTEM' },
   { id: 'sensors', label: 'Sensörler ve Bağlantı', icon: 'radio', section: 'SİSTEM' },
@@ -107,6 +108,44 @@ function TelemetryChart({ samples, selected, height = 270 }: { samples: Sample[]
     {data.length < 2 && <div className="chart-empty">Grafik için en az iki geçerli ölçüm gerekiyor</div>}
   </div>;
 }
+
+function OverviewTelemetryChart({samples}: {samples: Sample[]}) {
+  const recent = samples.slice(-48);
+  const seriesLine=(key:'heartRate'|'spo2'|'acceleration', min:number, max:number) => {
+    const points:string[]=[];
+    recent.forEach((sample,i)=>{
+      const val=sample[key];
+      if(typeof val!=='number'||!Number.isFinite(val))return;
+      const x=68+(i/Math.max(1,recent.length-1))*1014;
+      const y=210-((Math.min(max,Math.max(min,val))-min)/(max-min))*155;
+      points.push(x.toFixed(1)+','+y.toFixed(1));
+    });
+    return points.length>=2 ? points.join(' ') : '';
+  };
+  const heart=seriesLine('heartRate',40,130);
+  const oxygen=seriesLine('spo2',80,100);
+  const motion=seriesLine('acceleration',0,3);
+  const hasData=Boolean(heart||oxygen||motion);
+  const axes=[0,1,2,3,4];
+  const measured=recent.some(sample=>sample.source==='measured');
+  return <div className="figma-chart-wrap">
+    <div className="figma-chart-legend">
+      <span><i style={{background:'#4ce3aa'}}/>Kalp hızı · BPM</span>
+      <span><i style={{background:'#72c7f7'}}/>SpO₂ · %</span>
+      <span><i style={{background:'#f7c654'}}/>Hareket · g</span>
+      <span className="figma-chart-note">{measured?'GERÇEK ÖLÇÜM':recent.length?'DEMO / SİMÜLASYON':'ÖLÇÜM BEKLENİYOR'}</span>
+    </div>
+    <svg viewBox="0 0 1150 270" preserveAspectRatio="none" className="figma-multi-svg" role="img" aria-label="Kalp hızı, tahmini oksijen satürasyonu ve ivme telemetrisi">
+      {axes.map(i=><line key={i} x1="68" x2="1082" y1={55+i*39} y2={55+i*39} stroke="#253449" strokeDasharray="3 5"/>)}
+      {recent.length>1 && axes.map(i=><text key={i} x={68+i*253.5} y="250" textAnchor={i===0?'start':i===4?'end':'middle'} fill="#6e8499" fontSize="11">{clockTime(recent[Math.round(i*(recent.length-1)/4)].observedAt)}</text>)}
+      {heart&&<polyline points={heart} stroke="#4ce3aa" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>}
+      {oxygen&&<polyline points={oxygen} stroke="#72c7f7" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>}
+      {motion&&<polyline points={motion} stroke="#f7c654" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>}
+    </svg>
+    {!hasData&&<div className="figma-chart-empty">Canlı grafik için en az iki geçerli ölçüm gerekli. Demo verileri gerçek sensör ölçümü olarak gösterilmez.</div>}
+  </div>;
+}
+
 function StatLine({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return <div className="stat-line"><span>{label}</span><strong className={tone || ''}>{value}</strong></div>;
 }
@@ -154,34 +193,79 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [demoLinkLost, setDemoLinkLost] = useState(false);
   const seq = useRef(18);
+  const connectionState = useRef({online:false,consecutiveFailures:0});
+  const pollInFlight = useRef(false);
+  const pollNumber = useRef(0);
+  const missionErrors = useRef(0);
+  const [apiSyncDelayed, setApiSyncDelayed] = useState(false);
 
   const refreshApi = useCallback(async () => {
+    // No concurrent polls: slow Wi-Fi responses must not race each other.
+    if (pollInFlight.current) return;
+    pollInFlight.current = true;
+    const includeEvents = pollNumber.current++ % 3 === 0;
+    const request = async (path: string) => {
+      const r = await fetch(API + path, { signal: AbortSignal.timeout(4000), cache:'no-store' });
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      return r;
+    };
     try {
-      const [health, mission, events] = await Promise.all([
-        fetch(`${API}/health`), fetch(`${API}/api/v1/mission/status`), fetch(`${API}/api/v1/events?limit=80`)
+      const [health, mission, events] = await Promise.allSettled([
+        request('/health'),
+        request('/api/v1/mission/status'),
+        includeEvents ? request('/api/v1/events?limit=80') : Promise.resolve(null)
       ]);
-      if (!health.ok || !mission.ok || !events.ok) throw new Error('API yanıt vermiyor');
-      const data = await mission.json() as ApiMission;
-      const log = await events.json() as { events: { id:number; kind:string; occurred_at:string; payload:Record<string,unknown> }[] };
-      setBackendOnline(true); setApiMission(data);
-      setApiCheck(data.self_check?.status ?? null);
-      setApiEvents(log.events.map(e => ({ id:String(e.id), kind:e.kind, at:e.occurred_at,
-        detail:e.kind==='telemetry_assessed'?'FastAPI tarafından değerlendirildi':e.kind==='simulation_link_loss'?'Simülasyon bağlantısı kesildi':'Görev olayı kaydedildi', source:'api' })));
-      // API'nin Mission Black Box kayıtları gerçek sensör geçmişini de içerir.
-      // Sayfa yenilendiğinde grafik sıfırdan başlamasın.
-      const historical = log.events
-        .filter(e => e.kind === 'telemetry_assessed' && e.payload?.telemetry && typeof e.payload.telemetry === 'object')
-        .map(e => mapApiTelemetry(e.payload.telemetry as Record<string, unknown>))
-        .reverse();
-      if (data.assessment?.telemetry) historical.push(mapApiTelemetry(data.assessment.telemetry));
-      if (historical.length) setApiSamples(current => {
-        const unique = new Map<string, Sample>();
-        [...current, ...historical].forEach(packet => unique.set(packet.id, packet));
-        return [...unique.values()]
-          .sort((a,b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime())
-          .slice(-150);
+      // A failed events query does not mean the API went offline.
+      const alive = health.status==='fulfilled' || mission.status==='fulfilled'
+        || (events.status==='fulfilled' && events.value!==null);
+      const state = nextApiConnection(connectionState.current,alive);
+      connectionState.current = state;
+      setBackendOnline(state.online);
+      let latestTelemetry: Record<string,unknown> | null = null;
+      if (mission.status==='fulfilled') {
+        try {
+          const data = await mission.value.json() as ApiMission;
+          setApiMission(data);
+          setApiCheck(data.self_check?.status ?? null);
+          latestTelemetry = data.assessment?.telemetry ?? null;
+          missionErrors.current=0;
+          setApiSyncDelayed(false);
+        } catch {
+          missionErrors.current++;
+          if(missionErrors.current>=2) setApiSyncDelayed(true);
+        }
+      } else {
+        missionErrors.current++;
+        if(missionErrors.current>=2 && state.online) setApiSyncDelayed(true);
+      }
+
+      const historical: Sample[] = [];
+      if(events.status==='fulfilled' && events.value!==null) {
+        try {
+          const log = await events.value.json() as {events:{id:number;kind:string;occurred_at:string;payload:Record<string,unknown>}[]};
+          setApiEvents(log.events.map(e=>({
+            id:String(e.id),kind:e.kind,at:e.occurred_at,
+            detail:e.kind==='telemetry_assessed'?'FastAPI tarafından değerlendirildi'
+              :e.kind==='simulation_link_loss'?'Simülasyon bağlantısı kesildi':'Görev olayı kaydedildi',
+            source:'api'
+          })));
+          historical.push(...log.events
+            .filter(e=>e.kind==='telemetry_assessed' && e.payload?.telemetry && typeof e.payload.telemetry==='object')
+            .map(e=>mapApiTelemetry(e.payload.telemetry as Record<string,unknown>))
+            .reverse());
+        } catch {
+          // Keep the previous event history on a malformed optional response.
+        }
+      }
+      if(latestTelemetry) historical.push(mapApiTelemetry(latestTelemetry));
+      if(historical.length) setApiSamples(current=>{
+        const unique=new Map<string,Sample>();
+        [...current,...historical].forEach(packet=>unique.set(packet.id,packet));
+        return [...unique.values()].sort((a,b)=>new Date(a.observedAt).getTime()-new Date(b.observedAt).getTime()).slice(-150);
       });
-    } catch { setBackendOnline(false); }
+    } finally {
+      pollInFlight.current=false;
+    }
   }, []);
 
   useEffect(() => {
@@ -338,9 +422,9 @@ export default function App() {
   return <div className="app-shell">
     {mobileNav && <button className="mobile-backdrop" aria-label="Menüyü kapat" onClick={()=>setMobileNav(false)}/>}
     <aside className={`sidebar ${mobileNav?'sidebar-open':''}`}>
-      <div className="brand"><div className="brand-mark"><Icon name="activity" size={24}/></div>
-        <div><strong>ASTROVITAL <em>X</em></strong><small>MISSION HEALTH SYSTEM</small></div></div>
-      <div className="mission-label"><span className="dot dot-good"/> SİSTEM HAZIR <small>PROTOTYPE / V1.0</small></div>
+      <div className="brand"><div><strong>AstroVital X</strong><small>MÜRETTEBAT SAĞLIK SİSTEMİ</small></div></div>
+      <div className="figma-mission-box"><strong>{missionId}</strong><span>Mars araştırma istasyonu</span></div>
+      <div className="mission-label"><span className={backendOnline?'dot dot-good':'dot dot-warn'}/>{backendOnline?'YEREL SİSTEM ETKİN':'API BAĞLANTISI BEKLENİYOR'}</div>
       <nav className="side-nav">{NAV.map((item,i)=><div key={item.id}>
         {(i===0||NAV[i-1].section!==item.section)&&<div className="nav-heading">{item.section}</div>}
         <button className={`nav-item ${page===item.id?'active':''}`} onClick={()=>{setPage(item.id);setMobileNav(false);setNotice('');}}>
@@ -355,37 +439,86 @@ export default function App() {
     </aside>
 
     <div className="main-column">
-      <header className="topbar"><div className="breadcrumb"><button className="mobile-menu" onClick={()=>setMobileNav(true)} aria-label="Menüyü aç"><Icon name="menu"/></button>
-        <span className="crumb-muted">GÖREV KONTROL</span><Icon name="chevron" size={14}/><strong>{NAV.find(n=>n.id===page)?.label}</strong></div>
-        <div className="topbar-right"><div className="header-time"><Icon name="clock" size={15}/>{clockTime(new Date(now).toISOString())}</div>
-          <Pill tone={backendOnline?'good':'warn'}><span className="pill-dot"/>{backendOnline?'API BAĞLI':'API ÇEVRİMDIŞI'}</Pill>
+      <header className="topbar">
+        <button className="mobile-menu" onClick={()=>setMobileNav(true)} aria-label="Menüyü aç"><Icon name="menu"/></button>
+        <div className="figma-top-stats"><div><span>GÖREV</span><strong>{missionId}</strong></div>
+          <div><span>MÜRETTEBAT</span><strong>ASTRO-01</strong></div>
+          <div><span>GÖREV SÜRESİ</span><strong>YEREL OTURUM</strong></div></div>
+        <div className="topbar-right">
+          <div className="figma-connection-status"><span className={liveMeasured?'live-dot':'live-dot muted-dot'}/>
+            <div><strong>{liveMeasured?'Bağlı / ESP32 etkin':backendOnline?(apiSyncDelayed?'API bağlı / Veri gecikiyor':'API bağlı / Sensör bekleniyor'):'API çevrimdışı'}</strong>
+              <span>Son telemetri: {last?clockTime(last.observedAt):'—'} · {sourceLabel}</span></div></div>
           <button className="notification-button" onClick={()=>setPage('notifications')} aria-label="Bildirimleri aç"><Icon name="bell" size={19}/>{events.some(e=>e.kind.includes('loss'))&&<span/>}</button>
-          <div className="profile-badge">A1</div></div></header>
+        </div>
+      </header>
 
       <main className="content">
-        <div className="page-heading"><div><span className="eyebrow"><span className="cyan-slash">//</span> {intro.eyebrow}</span>
-          <h1>{intro.title}</h1><p>{intro.subtitle}</p></div>
-          <div className="heading-status"><div className="heading-line"><span className={connected?'live-dot':'live-dot muted-dot'}/> {sourceLabel}</div><span>{last?.deviceId ?? 'Cihaz bekleniyor'}</span><span>{missionId} <span className="separator">/</span> ASTRO-01</span></div></div>
-        {mode === 'api' && last?.source === 'measured' && <div className={liveMeasured?'device-live-banner':'device-live-banner device-stale-banner'}>
+        <div className="page-heading"><div>
+          {page!=='overview'&&<span className="eyebrow">{intro.eyebrow}</span>}
+          <h1>{page==='overview'?'Genel Bakış':intro.title}</h1>
+          <p>{page==='overview'?'Anlık sağlık görünümü ve öncelikli görev aksiyonları.':intro.subtitle}</p></div>
+          <div className="heading-status"><span>{new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'short',year:'numeric',timeZone:'Europe/Istanbul'}).format(new Date(now)).toUpperCase()}</span><span>{sourceLabel}</span></div></div>
+        {page==='overview'&&<div className="figma-overview-disclaimer"><strong>SİMÜLASYON</strong><span>Tüm ölçümler gösterim amaçlıdır; gerçek sensör verileri kaynak etiketiyle ayrılır. Klinik tanı veya doğrulanmış astronot sağlık standardı değildir.</span></div>}
+        {page !== 'overview' && mode === 'api' && last?.source === 'measured' && <div className={liveMeasured?'device-live-banner':'device-live-banner device-stale-banner'}>
           <Icon name="radio" size={18}/><strong>{liveMeasured?'ESP32 CANLI BAĞLI':'ESP32 TELEMETRİSİ GÜNCEL DEĞİL'}</strong>
           <span>{last.deviceId} · Paket #{last.sequence} · {latestSeconds ?? '—'} sn önce</span>
           {invalidSpO2 && <span className="invalid-measurement">SpO₂ = 0 geçersiz, gösterilmiyor</span>}
         </div>}
         {notice && <div className="notice" role="status"><Icon name="alert" size={18}/>{notice}<button onClick={()=>setNotice('')} aria-label="Bildirimi kapat">×</button></div>}
 
+
         {page==='overview' && <>
-          <div className="overview-banner"><div className="banner-left"><span className="eyebrow">ASTRONAUT HEALTH STATUS</span>
-            <h2>{statusCopy}</h2><p>{assessment.usable?'Kalite kontrolleri geçen son ölçüme göre operasyonel durum':'Veri güvenilirliği kontrol ediliyor. Bu sonuç tıbbi tanı değildir.'}</p>
-            <div className="banner-meta"><Pill tone={statusTone(assessment.status)}>{assessment.status.toUpperCase()}</Pill><span>SON VERİ: {last?clockTime(last.observedAt):'Bekleniyor'}</span></div></div>
-            <div className="banner-right"><div className="orbital-ring"><Icon name="pulse" size={38}/><span className="ring-dot"/></div><span>HADSE / STATUS ENGINE</span></div></div>
+          <div className="figma-section-row"><h2>Astronot Sağlık Durumu</h2>
+            <span className={liveMeasured?'figma-live-label':'figma-live-label demo-label'}><span className={liveMeasured?'live-dot':'live-dot muted-dot'}/>{liveMeasured?'CANLI İZLEME':mode==='sim'?'DEMO / SİMÜLASYON':'VERİ BEKLENİYOR'}</span>
+          </div>
           {metricStrip}
-          <div className="dashboard-grid"><Panel title="Canlı Sağlık Telemetrisi" subtitle="Zaman içinde izlenen fizyolojik göstergeler" className="wide" action={<button className="text-button" onClick={()=>setPage('telemetry')}>Detaylar <Icon name="arrow" size={15}/></button>}>
-              {chartControls}<TelemetryChart samples={chartSamples} selected={series}/><div className="chart-footer"><span><i className="legend-dot" style={{background:SERIES.find(s=>s.key===series)?.color}}/>{SERIES.find(s=>s.key===series)?.name} verisi</span><span>{samples.length} ölçüm · {sourceLabel}</span></div>
+          <section className="figma-telemetry-panel">
+            <div className="figma-panel-top">
+              <div><h3>Canlı Sağlık Telemetrisi</h3><p>Kaynağı ayrılmış zaman serileri · Nabız, tahmini SpO₂, hareket</p></div>
+              <div className="figma-panel-controls">
+                <span className={liveMeasured?'figma-live-label':'figma-live-label demo-label'}><span className={liveMeasured?'live-dot':'live-dot muted-dot'}/>{liveMeasured?'Canlı':'Gösterim'}</span>
+                <select aria-label="Telemetri zaman aralığı" value={timeRange} onChange={e=>setTimeRange(e.target.value)}>{['5 dk','15 dk','1 saat','24 saat'].map(t=><option key={t}>{t}</option>)}</select>
+                <button className="icon-button" onClick={()=>{if(paused){setPaused(false);setFrozenSamples(null);}else{setFrozenSamples(visibleSamples);setPaused(true);}}} title={paused?'Grafiği sürdür':'Grafiği duraklat'}><Icon name={paused?'play':'pause'} size={15}/></button>
+              </div>
+            </div>
+            <OverviewTelemetryChart samples={chartSamples}/>
+          </section>
+          <div className="figma-middle-grid">
+            <Panel title="HADSE | Sağlık Değerlendirme Sistemi" className="figma-compact-panel">
+              <div className="figma-hadse-compact">
+                <div className="figma-hadse-status"><span className={assessment.usable?'dot dot-good':'dot dot-warn'}/><strong>{statusCopy}</strong><small>{last?clockTime(last.observedAt):'Ölçüm bekleniyor'} · {sourceLabel}</small></div>
+                <p>{assessment.explanation}</p><small>{assessment.usable?'Kural tabanlı ön değerlendirme; klinik tanı değildir.':'Geçerli ölçüm olmadan öneri üretilmez; operatör doğrulaması gerekir.'}</small>
+                <div><button className="btn btn-primary" onClick={()=>setPage('hadse')}>Değerlendirmeyi Görüntüle</button><span className="figma-fineprint">Tanı değil, karar desteği.</span></div>
+              </div>
             </Panel>
-            <Panel title="HADSE Değerlendirmesi" subtitle="Açıklanabilir, kural tabanlı karar desteği" className="side-evaluation">{hadsePanel}</Panel>
-            <Panel title="Sensör Güvenilirliği" subtitle="Sensor Confidence Engine" className="half">{confidencePanel}</Panel>
-            <Panel title="Son Görev Olayları" subtitle="Mission Black Box / olay geçmişi" className="half" action={<button className="text-button" onClick={()=>setPage('blackbox')}>Tüm kayıtlar <Icon name="arrow" size={15}/></button>}>{records}</Panel></div>
-          <div className="science-note"><Icon name="shield" size={19}/><div><strong>Bilimsel temelli izleme prototipi</strong><span>NASA HRP araştırmaları temel alınmıştır. Tıbbi tanı, doğrudan radyasyon veya kemik kaybı ölçümü yapılmaz.</span></div><a href="https://www.nasa.gov/hrp/hazards/" target="_blank" rel="noreferrer">NASA HRP ↗</a></div>
+            <Panel title="Astronot Kontrolü" className="figma-compact-panel" action={<span className="figma-form-count">{Object.keys(checkAnswers).length} / 4</span>}>
+              <div className="figma-check-summary">
+                <p>{selectedCheck===null?'Kısa kontrol için yeni değerlendirme bekleniyor.':selectedCheck==='okay'?'Son kontrol: İyi':selectedCheck==='fatigued'?'Son kontrol: Yorgunluk bildirildi':'Son kontrol: Destek ihtiyacı bildirildi'}</p>
+                <span>Genel durum · yorgunluk · baş dönmesi</span>
+                <span>Uyku kalitesi · stres durumu</span>
+                <div><button className="btn btn-primary" onClick={()=>setPage('selfcheck')}>Kontrolü Başlat</button><small>Son: {lastCheckAt?clockTime(lastCheckAt):'Kayıt yok'}</small></div>
+              </div>
+            </Panel>
+          </div>
+          <div className="figma-bottom-grid">
+            <Panel title="Görev ve Navigasyon" className="figma-bottom-panel" action={<span className="figma-demo-chip">DEMO</span>}>
+              <div className="figma-detail-list">
+                <p>Harici rota ve çevre sensörleri bu sürümün API'sine bağlı değil.</p>
+                <StatLine label="Sıcaklık" value="— · DEMO"/><StatLine label="Basınç" value="— · DEMO"/>
+                <StatLine label="Tahmini irtifa" value="— · DEMO"/><StatLine label="Pusula yönü" value="— · DEMO"/>
+              </div>
+            </Panel>
+            <Panel title="Görev Kayıtları" className="figma-bottom-panel" action={<button className="text-button" onClick={()=>setPage('blackbox')}>Tüm kayıtlar <Icon name="arrow" size={13}/></button>}>{records}</Panel>
+            <Panel title="Bağlantı Mimarisi" className="figma-bottom-panel">
+              <div className="figma-link-summary">
+                <p>Giyilebilir → Yerel istasyon → Dünya</p>
+                <span><i className={liveMeasured?'dot dot-good':'dot dot-warn'}/>{liveMeasured?'ESP32 bağlı':'ESP32 bekleniyor'} · {backendOnline?'Yerel sistem etkin':'API çevrimdışı'}</span>
+                <span><i className="dot dot-warn"/>Dünya hattı: <strong>DEMO · entegre değil</strong></span>
+                <small>Yerel veri akışı gerçek API ile sağlanır. Uzak iletişim ayrı bir gelecek özelliğidir.</small>
+              </div>
+            </Panel>
+          </div>
+          <div className="figma-reference-note"><span>NASA SPACE APPS / 2026</span><span>ARAŞTIRMA PROTOTİPİ · KLİNİK SİSTEM DEĞİL</span></div>
         </>}
 
         {page==='telemetry' && <>{metricStrip}<Panel title="Sağlık Veri Akışı" subtitle="Kaynağa ve zamana göre işaretlenmiş sensör ölçümleri" action={<Pill tone={connected?'good':'bad'}>{connected?'BAĞLANTI VAR':'BAĞLANTI YOK'}</Pill>}>
@@ -431,14 +564,14 @@ export default function App() {
           <div className="connection-arrow"><span>→</span><small>TELEMETRİ</small></div>
           <div className="connection-node"><div className="node-icon"><Icon name="monitor" size={27}/></div><strong>Yerel İstasyon</strong><span>FastAPI / HADSE / SQLite</span><Pill tone={backendOnline?'good':'warn'}>{backendOnline?'API BAĞLI':'API ÇEVRİMDIŞI'}</Pill></div>
           <div className="connection-arrow"><span>→</span><small>GELECEK AŞAMA</small></div>
-          <div className="connection-node"><div className="node-icon"><Icon name="radio" size={27}/></div><strong>Dünya Kontrol</strong><span>Uzak bağlantı prototipi</span><Pill tone="neutral">ENTEGRASYON YOK</Pill></div></div></Panel>
+          <div className="connection-node"><div className="node-icon"><Icon name="radio" size={27}/></div><strong>Dünya Kontrol</strong><span>Uzak bağlantı prototipi</span><Pill tone="neutral">DEMO · ENTEGRASYON YOK</Pill></div></div></Panel>
           <div className="two-col extra-space"><Panel title="Sensör Verileri" subtitle="Doğrulanmış ve beklenen veri kanalları">
             <StatLine label="Nabız (BPM)" value={last?.heartRate!=null?String(last.heartRate):'Mevcut değil'}/>
             <StatLine label="Tahmini SpO₂" value={last?.spo2!=null?last.spo2+'%':invalidSpO2?'Geçersiz (0)':'Mevcut değil'}/>
             <StatLine label="IMU ivme" value={last?last.acceleration.toFixed(3)+' g':'Mevcut değil'}/>
-            <StatLine label="Radyasyon dozu" value="Sensör bulunmuyor"/><StatLine label="Kemik yoğunluğu" value="Ölçülemiyor"/>
+            <StatLine label="Radyasyon dozu" value="DEMO · Sensör yok"/><StatLine label="Kemik yoğunluğu" value="DEMO · Ölçülemiyor"/>
           </Panel><Panel title="Bağlantı Tanılaması" subtitle="Gerçek API ve veri kaynaklarının durumu">
-            <StatLine label="FastAPI" value={backendOnline?'Erişilebilir':'Kapalı'}/><StatLine label="Dashboard modu" value={mode==='sim'?'Yerel simülasyon':'Backend telemetrisi'}/>
+            <StatLine label="Görev senkronizasyonu" value={apiSyncDelayed?"Geçici gecikme / son veri korunuyor":"Normal"}/><StatLine label="FastAPI" value={backendOnline?'Erişilebilir':'Kapalı'}/><StatLine label="Dashboard modu" value={mode==='sim'?'Yerel simülasyon':'Backend telemetrisi'}/>
             <StatLine label="Yeni paket akışı" value={connected?'Mevcut':'Kesildi'}/><StatLine label="Son paket" value={latestSeconds===null?'—':latestSeconds+' saniye önce'}/>
             <div className="row-button"><button className="btn btn-secondary" onClick={()=>void refreshApi()}><Icon name="refresh" size={16}/> Yeniden Kontrol Et</button></div>
           </Panel></div></>}
@@ -449,14 +582,14 @@ export default function App() {
 
         {page==='settings' && <div className="two-col settings-page"><Panel title="Veri Kaynağı" subtitle="Gösterilecek telemetri akışını seçin">
           <div className="mode-options"><button className={mode==='sim'?'mode-option active':'mode-option'} onClick={()=>{setMode('sim');setRunning(false);setPaused(false);setFrozenSamples(null)}}><Icon name="play"/><div><strong>Yerel Simülasyon</strong><span>Backend olmadan çalışan örnek veriler</span></div>{mode==='sim'&&<Icon name="check" size={18}/>}</button>
-            <button className={mode==='api'?'mode-option active':'mode-option'} onClick={()=>{setMode('api');setRunning(false);setPaused(false);setFrozenSamples(null)}}><Icon name="radio"/><div><strong>Canlı FastAPI</strong><span>127.0.0.1:8000 adresindeki görev verileri</span></div>{mode==='api'&&<Icon name="check" size={18}/>}</button></div>
+            <button className={mode==='api'?'mode-option active':'mode-option'} onClick={()=>{setMode('api');setRunning(false);setPaused(false);setFrozenSamples(null)}}><Icon name="radio"/><div><strong>Canlı FastAPI</strong><span>Pi / sunucu üzerinden alınan görev verileri</span></div>{mode==='api'&&<Icon name="check" size={18}/>}</button></div>
           <p className="small-copy">Simüle edilmiş değerler gerçek astronot ölçümü değildir. CANLI API de simülasyon paketleri gönderebilir; her paket kaynak etiketi taşır.</p>
         </Panel><Panel title="Görev Bilgisi" subtitle="Yerel gösterim tercihleri">
           <label className="field-label" htmlFor="missionid">Görev kimliği</label><input id="missionid" className="text-input" value={missionId} maxLength={24} onChange={e=>setMissionId(e.target.value.toUpperCase())}/>
           <div className="setting-note">Astronot: ASTRO-01 · Saat dilimi: UTC · Arayüz: Türkçe</div>
         </Panel></div>}
 
-        <div className="demo-console"><div className="console-main"><div className="console-title"><span className="console-pulse"/><div><strong>Görev Simülatörü</strong><small>Donanım gerektirmeyen test akışı</small></div></div>
+        <div className={page==='overview'?'demo-console overview-hide':'demo-console'}><div className="console-main"><div className="console-title"><span className="console-pulse"/><div><strong>Görev Simülatörü</strong><small>Donanım gerektirmeyen test akışı</small></div></div>
           <div className="console-controls"><select value={scenario} aria-label="Simülasyon senaryosu" onChange={e=>setScenario(e.target.value as Scenario)}>{SCENARIOS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
             <button className="btn btn-outline" onClick={()=>void step()} disabled={running||liveMeasured}><Icon name="arrow" size={15}/> Tek Adım</button>
             <button className="btn btn-primary" disabled={liveMeasured} onClick={()=>setRunning(r=>!r)}><Icon name={running?'pause':'play'} size={17}/>{running?'Durdur':'Simülasyonu Başlat'}</button></div></div>
