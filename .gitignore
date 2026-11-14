@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+# Runtime data
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite3-shm
+*.sqlite3-wal
+backend/data/
+# Frontend
+node_modules/
+dist/
+.vite/
+coverage/
+# Local/private settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.p12
+*.pfx
+# Local deployment artifacts
+*.tar.gz
+*.zip
+offline_wheels*/
+.deployment_backups/
+.incoming*/
+*.log
+.DS_Store
+Thumbs.db

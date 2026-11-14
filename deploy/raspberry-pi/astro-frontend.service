@@ -1,0 +1,17 @@
+[Unit]
+Description=AstroVital X dashboard
+After=network.target
+ConditionPathIsDirectory=/home/mustafa/astrovital/frontend
+
+[Service]
+Type=simple
+User=mustafa
+Environment=FRONTEND_DIR=/home/mustafa/astrovital/frontend
+Environment=FRONTEND_PORT=5173
+WorkingDirectory=/home/mustafa/astrovital/frontend
+ExecStart=/usr/local/lib/astrovital/run-frontend.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

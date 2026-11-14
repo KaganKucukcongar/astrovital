@@ -1,0 +1,17 @@
+[Unit]
+Description=AstroVital X API
+After=network.target
+ConditionPathIsDirectory=/home/mustafa/astrovital/backend
+
+[Service]
+Type=simple
+User=mustafa
+Environment=BACKEND_DIR=/home/mustafa/astrovital/backend
+Environment=BACKEND_PORT=8000
+WorkingDirectory=/home/mustafa/astrovital/backend
+ExecStart=/usr/local/lib/astrovital/run-backend.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
