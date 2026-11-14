@@ -4,12 +4,19 @@ import {
   type Assessment, type CheckStatus, type LogEvent, type Page, type Sample, type Scenario
 } from './domain';
 import { nextApiConnection } from './apiConnectivity';
+import { selectOverviewMissionAnalysis } from './calibrationOverview';
+import {VoiceCallModal, VoiceCallPanel} from './VoiceCallDemo';
+import {LiveRadioPanel, LiveRadioSummary} from './LiveRadio';
+import {type VoiceCallDirection, type VoiceCallTarget} from './voiceCallModel';
 
 const API = import.meta.env.VITE_API_BASE || window.location.protocol + '//' + window.location.hostname + ':8000';
 
 type CalibrationReference = {count:number; median:number|null; mad:number|null; required:number};
 type CalibrationStatus = {
   active:boolean; phase:'inactive'|'baseline'|'monitoring'|'finished';
+  monitoring_enabled:boolean;analysis_status:string;analysis_label:string;
+  mission_recommendation:string;last_received_at:string|null;
+  deviation_progress?:Record<string,number>;
   session_id:string|null;csv_filename:string|null;started_at:string|null;
   sample_count:number; quality_accepted_count:number; max_samples:number;
   baseline: {heart_rate_bpm:CalibrationReference; spo2_pct:CalibrationReference};
@@ -31,7 +38,7 @@ const NAV: { id: Page; label: string; icon: string; section: string }[] = [
   { id: 'overview', label: 'Genel Bakış', icon: 'grid', section: 'İZLEME' },
   { id: 'telemetry', label: 'Canlı Telemetri', icon: 'activity', section: 'İZLEME' },
   { id: 'hadse', label: 'Sağlık Analizi ve HADSE', icon: 'pulse', section: 'İZLEME' },
-  { id: 'selfcheck', label: 'Astronot Kontrolü', icon: 'clipboard', section: 'İZLEME' },
+  { id: 'voice', label: 'Sesli İletişim (Telsiz)', icon: 'phone', section: 'İZLEME' },
   { id: 'blackbox', label: 'Görev Kayıtları', icon: 'database', section: 'SİSTEM' },
   { id: 'sensors', label: 'Sensörler ve Bağlantı', icon: 'radio', section: 'SİSTEM' },
   { id: 'notifications', label: 'Bildirimler', icon: 'bell', section: 'SİSTEM' },
@@ -43,6 +50,7 @@ const ICON_PATHS: Record<string, ReactNode> = {
   activity: <path d="M2 12h4l3-7 4 14 3-7h6"/>,
   pulse: <><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0l-1 1-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M4 12h4l2-3 3 6 2-3h4"/></>,
   clipboard: <><rect x="5" y="4" width="14" height="18" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-5"/></>,
+  phone: <path d="M22 16.8v3a2 2 0 0 1-2.2 2A19.7 19.7 0 0 1 2.2 4.2 2 2 0 0 1 4.2 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.7L7.2 10a16 16 0 0 0 6.8 6.8l1.6-1.9a2 2 0 0 1 1.7-.6l3 .5a2 2 0 0 1 1.7 2Z"/>,
   database: <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></>,
   radio: <><circle cx="12" cy="12" r="2"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16M20 4a11 11 0 0 1 0 16"/></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
@@ -186,12 +194,11 @@ export default function App() {
   const [apiSamples, setApiSamples] = useState<Sample[]>([]);
   const [demoSamples, setDemoSamples] = useState<Sample[]>(() => Array.from({length:18}, (_,i) => createDemoSample('nominal',i+1,Date.now()-((17-i)*2000))!));
   const [demoEvents, setDemoEvents] = useState<LogEvent[]>([{ id:'start',kind:'demo-start',at:nowStamp(),detail:'Yerel örnek oturumu başlatıldı',source:'simulated' as const }]);
-  const [check, setCheck] = useState<CheckStatus | null>(null);
-  const [checkAnswers, setCheckAnswers] = useState<Record<string,string>>({});
-  const [apiCheck, setApiCheck] = useState<CheckStatus | null>(null);
-  const [lastCheckAt, setLastCheckAt] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
+  // Sesli görüşme tamamen tarayıcı içinde canlandırılır; API/mikrofon kullanılmaz.
+  const [voiceCall, setVoiceCall] = useState<{target:VoiceCallTarget;direction:VoiceCallDirection}|null>(null);
+  const closeVoiceCall=useCallback(()=>setVoiceCall(null),[]);
+  const openVoiceCall=(target:VoiceCallTarget,direction:VoiceCallDirection)=>setVoiceCall({target,direction});
   const [now, setNow] = useState(Date.now());
   const [series, setSeries] = useState<SeriesKey>('heartRate');
   const [timeRange, setTimeRange] = useState('15 dk');
@@ -210,6 +217,7 @@ export default function App() {
   const missionErrors = useRef(0);
   const [apiSyncDelayed, setApiSyncDelayed] = useState(false);
   const [calibrationConsent, setCalibrationConsent] = useState(false);
+  const [sameParticipant, setSameParticipant] = useState(false);
   const [calibrationBusy, setCalibrationBusy] = useState(false);
   // Cihazın kendi saati ~4 sn geri olabildiğinden akışı paketlerin GELİŞİ
   // üzerinden izliyoruz; böylece 5 sn'lik HADSE kalite sınırını gevşetmiyoruz.
@@ -243,7 +251,6 @@ export default function App() {
         try {
           const data = await mission.value.json() as ApiMission;
           setApiMission(data);
-          setApiCheck(data.self_check?.status ?? null);
           latestTelemetry = data.assessment?.telemetry ?? null;
           missionErrors.current=0;
           setApiSyncDelayed(false);
@@ -357,7 +364,7 @@ export default function App() {
     ? mapApiTelemetry(apiMission.assessment.telemetry)
     : samples.at(-1) || null;
   const apiAssessment = apiMission?.assessment;
-  const localAssessment = assessSample(last,check,now);
+  const localAssessment = assessSample(last,null,now);
   // Akış bağlantısı paket geliş zamanından, tıbbi veri güncelliği ise
   // gözlem zamanından değerlendirilir. Bunlar aynı kavram değildir.
   const liveMeasured = mode === 'api' && isSensorStreamActive(last, latestMeasuredReceivedAt, now);
@@ -376,8 +383,13 @@ export default function App() {
     usable: apiAssessment.confidence.usable,
     reasons: apiAssessment.confidence.reasons.map(describeConfidenceReason),
     explanation: apiAssessment.decision.reason,
-  } : mode === 'api' ? assessSample(null,apiCheck,now) : localAssessment;
+  } : mode === 'api' ? assessSample(null,null,now) : localAssessment;
   const calibration = apiMission?.calibration ?? null;
+  // API, sensör akışı ve oturum aktif değilse eski adaylar Genel Bakış'ta uyarı olmaz.
+  const missionAnalysis = selectOverviewMissionAnalysis(calibration,{
+    mode, apiOnline: backendOnline, sensorStreamActive: liveMeasured,
+    measurementUsable: assessment.usable,
+  });
   const events = mode === 'api' ? apiEvents : demoEvents;
   const fromSensor = last?.source === 'measured';
   const sourceLabel = mode === 'sim' || last?.source === 'simulated' ? 'SİMÜLASYON'
@@ -398,7 +410,6 @@ export default function App() {
   }, [mode, liveMeasured, running]);
   const connected = mode === 'api' ? liveMeasured : !demoLinkLost;
   const invalidSpO2 = mode === 'api' && apiMission?.assessment?.telemetry.spo2_pct === 0;
-  const selectedCheck = mode === 'api' ? apiCheck : check;
   const statusCopy = statusText(assessment.status);
   const filteredEvents = events.filter(e => (logFilter==='tümü'|| e.kind.includes(logFilter)) && (eventName(e.kind)+' '+e.detail).toLocaleLowerCase('tr').includes(logQuery.toLocaleLowerCase('tr')));
   const latestPulse = samples.filter(s=>s.heartRate!==null).slice(-15).map(s=>s.heartRate as number);
@@ -411,38 +422,17 @@ export default function App() {
     { title:'Sensör Güvenilirliği',value:last?String(Math.round(assessment.confidence*100)):'—',unit:'%',note:assessment.usable?'Değerlendirmeye uygun':'Doğrulama gerekli',accent:assessment.usable?'#32d6a0':'#ff6474',chart:samples.slice(-15).map(s=>s.quality*100),icon:'shield' },
   ];
 
-  const submitCheck = async () => {
-    const currentStatus = checkAnswers.feeling === 'yardim' || checkAnswers.dizziness === 'evet' ? 'needs_help'
-      : checkAnswers.feeling === 'yorgun' || checkAnswers.sleep === 'zayif' ? 'fatigued' : 'okay';
-    if (!checkAnswers.feeling || !checkAnswers.sleep || !checkAnswers.stress || !checkAnswers.dizziness) {
-      setNotice('Lütfen dört öz değerlendirme sorusunu da yanıtlayın.'); return;
-    }
-    setBusy(true);
-    try {
-      if (mode === 'api') {
-        if (!backendOnline) throw new Error('API çevrimdışı');
-        const res = await fetch(`${API}/api/v1/self-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:currentStatus})});
-        if (!res.ok) throw new Error('Kaydetme başarısız');
-        setApiCheck(currentStatus); await refreshApi();
-      } else {
-        setCheck(currentStatus);
-        setDemoEvents(s=>[{id:'check-'+Date.now(),kind:'demo-check',at:nowStamp(),
-          detail:'Öz değerlendirme: '+ (currentStatus==='okay'?'İyi':currentStatus==='fatigued'?'Yorgun':'Destek gerekli'),
-          source:'local' as const},...s].slice(0,120));
-      }
-      setLastCheckAt(nowStamp());
-      setNotice('Öz değerlendirme kaydedildi. Bu bir tıbbi tanı değildir.');
-    } catch { setNotice('Öz değerlendirme kaydedilemedi. Bağlantıyı kontrol edin.'); }
-    finally { setBusy(false); }
-  };
-
-  const changeCalibration = async (action: 'start'|'stop') => {
+  const changeCalibration = async (action: 'start'|'stop'|'resume'|'disable-monitoring') => {
     if(mode!=='api' || !backendOnline) {
       setNotice('Kalibrasyon yalnızca canlı FastAPI modunda kullanılabilir.');
       return;
     }
-    if(action==='start' && !calibrationConsent) {
+    if((action==='start'||action==='resume') && !calibrationConsent) {
       setNotice('Katılımcının bilgilendirilmiş onayını doğrulamalısın.');
+      return;
+    }
+    if(action==='resume' && !sameParticipant) {
+      setNotice('Önceki CSV ile aynı kişinin ölçüldüğünü doğrulamalısın.');
       return;
     }
     setCalibrationBusy(true);
@@ -450,7 +440,8 @@ export default function App() {
       const response=await fetch(API+'/api/v1/calibration/'+action,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(action==='start'?{consent:true}:{}),
+        body:JSON.stringify(action==='start'?{consent:true}:
+          action==='resume'?{consent:true,same_participant:true}:{}),
       });
       if(!response.ok) {
         if(response.status===403) throw new Error('Oturumu bilgisayarından Ethernet üzerinden aç: 192.168.10.1:5173');
@@ -459,9 +450,12 @@ export default function App() {
       }
       await refreshApi();
       setCalibrationConsent(false);
+      setSameParticipant(false);
       setNotice(action==='start'
-        ? 'Onaylı CSV kalibrasyon kaydı başladı. Ad veya kimlik bilgisi kaydedilmiyor.'
-        : 'Kalibrasyon durduruldu; CSV Raspberry Pi üzerinde saklandı.');
+        ? 'Onaylı CSV kaydı başladı; kişisel referans sıfırlandı.'
+        : action==='stop' ? 'CSV kaydı durdu. Katılımcı onayına dayalı kişisel analiz sürüyor.'
+        : action==='resume' ? 'Aynı katılımcının önceki CSV referansı yüklendi; yeni CSV kaydı açılmadı.'
+        : 'Kişisel analiz sonlandırıldı.');
     } catch(e) {
       setNotice(e instanceof Error?e.message:'Kalibrasyon bağlantı hatası.');
     } finally {setCalibrationBusy(false);}
@@ -469,8 +463,15 @@ export default function App() {
 
   const calibrationPanel = <div className="calibration-panel">
     <div className="calibration-info">
-      <Pill tone={calibration?.active?'good':'neutral'}>{calibration?.active?'CSV KAYDI AÇIK': 'KAYIT KAPALI'}</Pill>
-      <span>Bu mod yalnızca onaylı katılımcıdan gelen ölçümleri CSV'ye kaydeder. Tıbbi teşhis veya eğitilmiş bir yapay zeka modeli değildir.</span>
+      <Pill tone={calibration?.active?'good':'neutral'}>{calibration?.active?'CSV KAYDI AÇIK': 'CSV KAYDI KAPALI'}</Pill>
+      <Pill tone={calibration?.monitoring_enabled?'good':'neutral'}>{calibration?.monitoring_enabled?'KİŞİSEL ANALİZ AÇIK':'ANALİZ KAPALI'}</Pill>
+      <span>CSV kayıt ve kişisel anomali izleme ayrı işlemlerdir. Katılımcı onayıyla açılan analiz CSV kapalıyken de sürebilir. Tıbbi teşhis değildir.</span>
+    </div>
+    <div className={'calibration-state calibration-state-'+missionAnalysis.state} role="status">
+      <strong>{missionAnalysis.label}</strong>
+      {missionAnalysis.category && <span>{missionAnalysis.category}</span>}
+      <p><b>ASTRONOT / GÖREV ÖNERİSİ:</b> {missionAnalysis.recommendation}</p>
+      <small>Son karar: {calibration?.analysis_status??'inactive'} · Kişisel referanslı prototip; klinik tanı değildir.</small>
     </div>
     <div className="calibration-stats">
       <StatLine label="Aşama" value={calibration?.phase==='baseline'?'Kişisel referans toplama'
@@ -485,6 +486,7 @@ export default function App() {
         ?calibration.baseline.spo2_pct.median.toFixed(1)+' %'
         :'Bekleniyor ('+(calibration?.baseline?.spo2_pct?.count??0)+'/20)'}/>
       <StatLine label="Anomali adayı sayısı" value={String(calibration?.anomaly_count??0)}/>
+      <StatLine label="Anomali izleme durumu" value={missionAnalysis.label}/>
       <StatLine label="CSV dosyası (Pi'de)" value={calibration?.csv_filename??'Kayıt başlamadı'}/>
     </div>
     {(calibration?.current_anomaly||calibration?.last_anomaly)&&<div className="calibration-alert" role="status">
@@ -493,16 +495,27 @@ export default function App() {
       <small>Doğrulanmamış istatistiksel sapma. Veri kalitesi ve kişinin kendi bildirimiyle değerlendirin; klinik tanı değildir.</small>
     </div>}
     {calibration?.quality_warning && calibration.active && <div className="calibration-quality">{calibration.quality_warning}</div>}
-    {!calibration?.active && <label className="calibration-consent">
-      <input type="checkbox" checked={calibrationConsent} onChange={e=>setCalibrationConsent(e.target.checked)} />
-      <span>Katılımcının bilgilendirilmiş onayını aldım. Ad, kimlik veya diğer kişisel bilgileri girmeyeceğim.</span>
-    </label>}
+    {!calibration?.active && <>
+      <label className="calibration-consent">
+        <input type="checkbox" checked={calibrationConsent} onChange={e=>setCalibrationConsent(e.target.checked)} />
+        <span>Katılımcının kişisel veri analizi için bilgilendirilmiş onayını aldım.</span>
+      </label>
+      <label className="calibration-consent">
+        <input type="checkbox" checked={sameParticipant} onChange={e=>setSameParticipant(e.target.checked)} />
+        <span>Önceki CSV verisini kullanacaksam bunun aynı astronota ait olduğunu doğruladım.</span>
+      </label>
+    </>}
     <div className="calibration-actions">
       {calibration?.active
-        ? <button className="btn btn-secondary" onClick={()=>void changeCalibration('stop')} disabled={calibrationBusy}>CSV kaydını durdur</button>
-        : <button className="btn btn-primary" onClick={()=>void changeCalibration('start')}
-            disabled={calibrationBusy||!calibrationConsent||mode!=='api'||!backendOnline}>Onaylı kalibrasyonu başlat</button>}
-      <small>CSV yerel Pi diskinde tutulur; dışarıya otomatik yüklenmez. Oturum için ilk 20 kaliteli, sakin ölçüm referans olarak kullanılır.</small>
+        ? <button className="btn btn-secondary" onClick={()=>void changeCalibration('stop')} disabled={calibrationBusy}>CSV kaydını durdur, analizi sürdür</button>
+        : <>
+          {calibration?.monitoring_enabled && <button className="btn btn-secondary" onClick={()=>void changeCalibration('disable-monitoring')} disabled={calibrationBusy||mode!=='api'||!backendOnline}>Kişisel analizi sonlandır</button>}
+          {!calibration?.monitoring_enabled && <button className="btn btn-secondary" onClick={()=>void changeCalibration('resume')}
+            disabled={calibrationBusy||!calibrationConsent||!sameParticipant||mode!=='api'||!backendOnline}>Önceki CSV'den analizi başlat</button>}
+          <button className="btn btn-primary" onClick={()=>void changeCalibration('start')}
+            disabled={calibrationBusy||!calibrationConsent||mode!=='api'||!backendOnline}>{calibration?.monitoring_enabled?'Yeni kişisel referans oluştur':'Yeni CSV kalibrasyonu başlat'}</button>
+        </>}
+      <small>CSV kaydı yalnızca onayla açılır. Analiz RAM'de sürebilir; backend yeniden başlarsa aynı kişinin önceki CSV'si yeniden onayla yüklenmelidir.</small>
     </div>
   </div>;
 
@@ -529,16 +542,16 @@ export default function App() {
     <div className={`hadse-status hadse-${assessment.status}`}><div className="hadse-symbol"><Icon name={assessment.status==='continue'?'check':'alert'} size={24}/></div>
       <div><span>MEVCUT DEĞERLENDİRME</span><h3>{statusCopy}</h3><p>{assessment.explanation}</p></div></div>
     <div className="hadse-actions"><div><span className="eyebrow">{assessment.status==='abstain'?'GÜVENLİ MOD · ÖNERİ YOK':'ÖNERİLEN SONRAKİ ADIM'}</span>
-      <strong>{!assessment.usable?'Ölçümü doğrula':assessment.status==='review'?'Öz değerlendirmeyi tamamla':'İzlemeyi sürdür'}</strong>
+      <strong>{!assessment.usable?'Ölçümü doğrula':assessment.status==='review'?'Görev kontrolüyle iletişime geç (demo)':'İzlemeyi sürdür'}</strong>
       <small>HADSE kural tabanlı prototiptir. Tanı koymaz ve klinik talimat vermez.</small></div>
-      <button className="btn btn-secondary" onClick={()=>setPage(assessment.usable?'selfcheck':'sensors')}>İncele <Icon name="arrow" size={15}/></button></div>
+      <button className="btn btn-secondary" onClick={()=>setPage(assessment.usable?'voice':'sensors')}>İncele <Icon name="arrow" size={15}/></button></div>
   </div>;
 
   const topIntro:Record<Page,{eyebrow:string;title:string;subtitle:string}>={
     overview:{eyebrow:'GÖREV MERKEZİ / GENEL DURUM',title:'Görev Genel Bakış',subtitle:'Astronot sağlığı ve görev telemetrisini tek merkezden izleyin.'},
     telemetry:{eyebrow:'GERÇEK ZAMANLI İZLEME',title:'Canlı Telemetri',subtitle:'Ölçümleri, sinyal güvenilirliğini ve zaman içindeki değişimleri inceleyin.'},
     hadse:{eyebrow:'KARAR DESTEK SİSTEMİ',title:'Sağlık Analizi ve HADSE',subtitle:'Veri kalite kontrolleri ve açıklanabilir operasyonel değerlendirmeler.'},
-    selfcheck:{eyebrow:'KİŞİSEL SAĞLIK KONTROLÜ',title:'Astronot Kontrolü',subtitle:'Kendi durumunuzu kaydedin; fizyolojik verileri öz bildirimle tamamlayın.'},
+    voice:{eyebrow:'GÖREV HABERLEŞMESİ / CANLI PCM',title:'Sesli İletişim (Telsiz)',subtitle:'ESP32 ile 8 kHz WebSocket üzerinden dinleme ve bas-konuş; görsel arama demoları ayrı.'},
     blackbox:{eyebrow:'MISSION BLACK BOX',title:'Görev Kayıtları',subtitle:'Ölçüm, bağlantı ve öz değerlendirme olaylarının zaman çizelgesi.'},
     sensors:{eyebrow:'CİHAZ DURUMU',title:'Sensörler ve Bağlantı',subtitle:'Veri akışı, haberleşme zinciri ve donanım durumunu izleyin.'},
     notifications:{eyebrow:'GÖREV BİLDİRİMLERİ',title:'Bildirimler',subtitle:'Dikkat gerektiren kayıtlar ve sistem olayları.'},
@@ -618,18 +631,19 @@ export default function App() {
           <div className="figma-middle-grid">
             <Panel title="HADSE | Sağlık Değerlendirme Sistemi" className="figma-compact-panel">
               <div className="figma-hadse-compact">
-                <div className="figma-hadse-status"><span className={assessment.usable?'dot dot-good':'dot dot-warn'}/><strong>{statusCopy}</strong><small>{last?clockTime(last.observedAt):'Ölçüm bekleniyor'} · {sourceLabel}</small></div>
-                <p>{assessment.explanation}</p><small>{assessment.usable?'Kural tabanlı ön değerlendirme; klinik tanı değildir.':'Geçerli ölçüm olmadan öneri üretilmez; operatör doğrulaması gerekir.'}</small>
-                <div><button className="btn btn-primary" onClick={()=>setPage('hadse')}>Değerlendirmeyi Görüntüle</button><span className="figma-fineprint">Tanı değil, karar desteği.</span></div>
+                <div className="figma-hadse-status"><span className={assessment.usable?'dot dot-good':'dot dot-warn'}/><strong>HADSE: {statusCopy}</strong><small>{last?clockTime(last.observedAt):'Ölçüm bekleniyor'} · {sourceLabel}</small></div>
+                <div className={'figma-mission-analysis figma-mission-analysis-'+missionAnalysis.state} role="status" aria-label="Kişisel anomali izleme durumu">
+                  <div className="figma-mission-analysis-head"><Icon name={missionAnalysis.state==='normal'?'check':'alert'} size={16}/><strong>{missionAnalysis.label}</strong></div>
+                  {missionAnalysis.category && <strong className="figma-mission-analysis-category">{missionAnalysis.category}</strong>}
+                  {missionAnalysis.confirmation && <small>{missionAnalysis.confirmation}</small>}
+                  <p><b>GÖREV ÖNERİSİ:</b> {missionAnalysis.recommendation}</p>
+                  <small>Kişisel referanslı araştırma prototipi · Klinik tanı veya göreve uygunluk onayı değildir.</small>
+                </div>
+                <div><button className="btn btn-primary" onClick={()=>setPage('hadse')}>HADSE ve Öneriyi İncele</button><span className="figma-fineprint">Durum sürekli gösterilir.</span></div>
               </div>
             </Panel>
-            <Panel title="Astronot Kontrolü" className="figma-compact-panel" action={<span className="figma-form-count">{Object.keys(checkAnswers).length} / 4</span>}>
-              <div className="figma-check-summary">
-                <p>{selectedCheck===null?'Kısa kontrol için yeni değerlendirme bekleniyor.':selectedCheck==='okay'?'Son kontrol: İyi':selectedCheck==='fatigued'?'Son kontrol: Yorgunluk bildirildi':'Son kontrol: Destek ihtiyacı bildirildi'}</p>
-                <span>Genel durum · yorgunluk · baş dönmesi</span>
-                <span>Uyku kalitesi · stres durumu</span>
-                <div><button className="btn btn-primary" onClick={()=>setPage('selfcheck')}>Kontrolü Başlat</button><small>Son: {lastCheckAt?clockTime(lastCheckAt):'Kayıt yok'}</small></div>
-              </div>
+            <Panel title="Canlı Sesli İletişim (Telsiz)" className="figma-compact-panel" action={<Pill tone="info">8 kHz PCM</Pill>}>
+              <LiveRadioSummary onOpen={()=>setPage('voice')}/>
             </Panel>
           </div>
           <div className="figma-bottom-grid">
@@ -676,21 +690,14 @@ export default function App() {
           <div className="science-note"><Icon name="alert" size={18}/><div><strong>Klinik sistem değildir</strong><span>Bu araç tıbbi risk yüzdesi, tanı veya doktor yerine geçecek tedavi önerisi üretmez. İhtiyaç durumunda görev sağlık protokolü izlenmelidir.</span></div></div>
         </>}
 
-        {page==='selfcheck' && <div className="two-col selfcheck-page"><Panel title="Astronot Öz Değerlendirmesi" subtitle="Kısa, gönüllü sağlık kontrol formu"><div className="question-form">
-          {[
-            {id:'feeling',title:'Bugün genel olarak nasıl hissediyorsunuz?',opts:[['iyi','İyi'],['yorgun','Yorgun'],['yardim','Desteğe ihtiyacım var']]},
-            {id:'sleep',title:'Son uyku kaliteniz nasıldı?',opts:[['iyi','İyi'],['orta','Orta'],['zayif','Yetersiz']]},
-            {id:'stress',title:'Algıladığınız stres düzeyi?',opts:[['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']]},
-            {id:'dizziness',title:'Baş dönmesi veya olağan dışı rahatsızlık var mı?',opts:[['hayir','Hayır'],['evet','Evet']]},
-          ].map((q,i)=><fieldset className="question" key={q.id}><legend><span>{String(i+1).padStart(2,'0')}</span> {q.title}</legend><div className="option-row">{q.opts.map(([v,label])=><label className={checkAnswers[q.id]===v?'option selected':'option'} key={v}>
-            <input type="radio" name={q.id} checked={checkAnswers[q.id]===v} onChange={()=>setCheckAnswers(a=>({...a,[q.id]:v}))}/>{label}</label>)}</div></fieldset>)}
-          <button className="btn btn-primary save-check" disabled={busy} onClick={()=>void submitCheck()}><Icon name="check" size={17}/>{busy?'Kaydediliyor...':'Kontrolü Kaydet'}</button></div>
-          </Panel><div className="stack"><Panel title="Son Kontrol Durumu" subtitle="Kullanıcı tarafından bildirilen durum">
-            <div className="check-summary"><div className="summary-icon"><Icon name="clipboard" size={25}/></div>
-              <strong>{selectedCheck===null?'Henüz değerlendirme yok':selectedCheck==='okay'?'Genel durum: İyi':selectedCheck==='fatigued'?'Yorgunluk bildirildi':'Destek ihtiyacı bildirildi'}</strong>
-              <span>{lastCheckAt?clockTime(lastCheckAt):mode==='api'&&apiMission?.self_check?clockTime(apiMission.self_check.recorded_at):'Öz değerlendirme bekleniyor'}</span></div>
-            <p className="small-copy">Yalnızca genel durum backend'e gönderilir. Ek anket cevapları bu sürümde sunucuya kaydedilmez.</p></Panel>
-            <Panel title="Kişisel Sağlık Geçmişi" subtitle="Bireysel referans verisi"><div className="empty-reference"><Icon name="activity" size={26}/><strong>Kişisel referans henüz yok</strong><p>Uzun vadeli karşılaştırma için yeterli, doğrulanmış geçmiş ölçümü gerekli. Mevcut demo verileri klinik referans oluşturmaz.</p></div></Panel></div></div>}
+        {page==='voice' && <>
+          <Panel title="Canlı Sesli İletişim (Telsiz)" subtitle="ESP32 ↔ Raspberry Pi ↔ Dashboard · gerçek 8 kHz PCM ses köprüsü" action={<Pill tone="good">CANLI WS</Pill>}>
+            <LiveRadioPanel/>
+          </Panel>
+          <Panel title="Görsel Arama Simülasyonu" subtitle="Gerçek mikrofon veya telsiz bağlantısı kullanmayan ayrı popup demoları" action={<Pill tone="info">DEMO</Pill>}>
+            <VoiceCallPanel onStart={openVoiceCall}/>
+          </Panel>
+        </>}
 
         {page==='blackbox' && <Panel title="Görev Olay Günlüğü" subtitle="Zaman damgalı, kaynak bilgisiyle ayrılmış olaylar" action={<Pill tone="info">{filteredEvents.length} KAYIT</Pill>}>
           <div className="filter-row"><label className="search-field"><Icon name="search" size={17}/><input value={logQuery} onChange={e=>setLogQuery(e.target.value)} placeholder="Kayıtlarda ara..."/></label>
@@ -746,5 +753,7 @@ export default function App() {
         <footer className="footer"><span>ASTROVITAL X / MARSUP-01</span><span>ARAŞTIRMA PROTOTİPİ · KLİNİK SİSTEM DEĞİL</span><span>V 1.0.0</span></footer>
       </main>
     </div>
+    {voiceCall && <VoiceCallModal key={voiceCall.target+voiceCall.direction} target={voiceCall.target}
+      direction={voiceCall.direction} onClose={closeVoiceCall}/>}
   </div>;
 }

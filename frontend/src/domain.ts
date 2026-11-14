@@ -2,7 +2,7 @@ export type Source = 'simulated' | 'measured';
 export type Scenario = 'nominal' | 'moderate_exertion' | 'high_motion' | 'poor_signal' | 'stale_data' | 'future_data' | 'missing_reading' | 'link_loss';
 export type Decision = 'continue' | 'review' | 'abstain';
 export type CheckStatus = 'okay' | 'fatigued' | 'needs_help';
-export type Page = 'overview' | 'telemetry' | 'hadse' | 'selfcheck' | 'blackbox' | 'sensors' | 'notifications' | 'settings';
+export type Page = 'overview' | 'telemetry' | 'hadse' | 'voice' | 'blackbox' | 'sensors' | 'notifications' | 'settings';
 
 export type Sample = {
   id: string;

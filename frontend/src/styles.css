@@ -476,3 +476,240 @@ a { color:inherit; }
 .calibration-actions {display:flex;flex-wrap:wrap;gap:13px;align-items:center;}
 .calibration-actions small {display:block;color:var(--muted);font-size:11px;line-height:1.5;flex:1;min-width:240px;}
 @media (max-width:620px){.calibration-stats .stat-line strong{max-width:60%;}}
+
+
+/* HADSE Genel Bakış: sadece aktif, onaylı oturumdan gelen sapma adayları. */
+.figma-hadse-anomaly {border:1px solid #81552c;background:#30271f;border-radius:7px;padding:12px 13px;display:flex;flex-direction:column;gap:7px;}
+.figma-hadse-anomaly-title {display:flex;align-items:center;gap:7px;color:#ffd08d;font:10px var(--mono);letter-spacing:.45px;}
+.figma-hadse-anomaly-title svg {flex:0 0 auto;}
+.figma-hadse-anomaly-type {font-size:13px;color:#ffe0ac;line-height:1.4;}
+.figma-hadse-anomaly-confirmation {font-size:10px;color:#d7ba94;}
+.figma-hadse-compact .figma-hadse-anomaly p {margin:3px 0;color:#f3d5af;font-size:11px;line-height:1.6;overflow-wrap:anywhere;}
+.figma-hadse-anomaly p b {font-weight:700;color:#ffdfac;}
+.figma-hadse-compact .figma-hadse-anomaly small {color:#c5ac90;font-size:10px;line-height:1.5;}
+
+
+/* Continuous HADSE personal monitor states */
+.figma-mission-analysis,.calibration-state{
+ display:flex;flex-direction:column;gap:7px;background:#16253a;
+ border:1px solid #335273;border-radius:7px;padding:12px 13px;color:#d0dfef;
+}
+.figma-mission-analysis-head{display:flex;gap:7px;align-items:center;font:10px var(--mono);letter-spacing:.4px;}
+.figma-mission-analysis-head svg{flex:0 0 auto;}
+.figma-mission-analysis-category{font-size:12px;color:#f7d39d;}
+.figma-hadse-compact .figma-mission-analysis p,.calibration-state p{
+ color:#d3deea;font-size:11px;line-height:1.65;margin:0;overflow-wrap:anywhere;
+}
+.figma-mission-analysis p b,.calibration-state p b{font-weight:700;color:#e4efff;}
+.figma-hadse-compact .figma-mission-analysis small,.calibration-state small{
+ font-size:10px;color:#93a8bb;line-height:1.55;display:block;
+}
+.figma-mission-analysis-normal,.calibration-state-normal{background:#132e27;border-color:#377a61;}
+.figma-mission-analysis-normal .figma-mission-analysis-head,.calibration-state-normal>strong{color:#88e4ba;}
+.figma-mission-analysis-anomaly,.calibration-state-anomaly{background:#37271d;border-color:#a16b34;}
+.figma-mission-analysis-anomaly .figma-mission-analysis-head,.calibration-state-anomaly>strong{color:#ffd5a1;}
+.figma-mission-analysis-quality_issue,.figma-mission-analysis-offline,
+.figma-mission-analysis-calibrating,.calibration-state-quality_issue,
+.calibration-state-offline,.calibration-state-calibrating{background:#2d281c;border-color:#846e3e;}
+.calibration-state>strong{font:11px var(--mono);}
+.calibration-state>span{font-weight:700;font-size:12px;}
+
+
+/* ASTROVITAL VOICE CALL PROTOTYPE */
+/* Call controls change local UI state only: there is no real audio or network call. */
+.voice-quick-panel{display:flex;flex-direction:column;gap:12px;min-width:0;}
+.voice-quick-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.voice-demo-dot{width:7px;height:7px;border-radius:50%;flex:none;background:#39c8e8;box-shadow:0 0 0 4px #39c8e81c;}
+.voice-quick-status b,.voice-eyebrow{font:10px var(--mono);letter-spacing:.6px;color:#8ce5f1;}
+.voice-quick-status>span:last-child{font-size:10px;color:#788da5;}
+.voice-quick-panel>p{margin:0;font-size:12px;color:#afc1d5;line-height:1.65;}
+.voice-quick-panel>small{font-size:10px;color:#667b96;line-height:1.5;}
+.voice-quick-actions,.voice-incoming-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
+.voice-call-primary,.voice-call-secondary,.voice-call-accept,.voice-call-decline{
+ border-radius:8px;border:1px solid #2a7183;min-height:40px;padding:9px 13px;display:inline-flex;align-items:center;
+ justify-content:center;gap:9px;font-size:11px;font-weight:700;transition:transform .16s,background .16s;
+}
+.voice-call-primary{background:#31c4da;color:#06212b;border-color:#38e0f0;}
+.voice-call-primary:hover:not(:disabled){background:#65e4f3;transform:translateY(-1px);}
+.voice-call-secondary{background:#132b3e;color:#95dcef;border-color:#275a6a;}
+.voice-call-secondary:hover:not(:disabled){background:#1a4152;color:#dcfaff;}
+.voice-quick-actions .voice-call-primary{flex:1;min-width:142px;}
+.voice-page{display:flex;flex-direction:column;gap:20px;}
+.voice-page-hero{border:1px solid #276078;background:linear-gradient(110deg,#143445,#102538 60%,#102036);
+ padding:24px;border-radius:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;}
+.voice-hero-identity{display:flex;align-items:center;gap:17px;}
+.voice-hero-icon{width:62px;height:62px;flex:none;display:flex;align-items:center;justify-content:center;
+ border:1px solid #377e8f;border-radius:17px;color:#71e7f5;background:#0c3541;}
+.voice-page-hero h2{font-size:22px;margin:8px 0 6px;letter-spacing:-.4px;}
+.voice-page-hero p,.voice-contact-card p,.voice-incoming-demo p,.voice-information p{color:#98aec5;font-size:12px;line-height:1.7;margin:0;}
+.voice-demo-stamp,.voice-contact-pill{border-radius:5px;border:1px solid #2c6c7d;
+ background:#143b4b;color:#72dff1;padding:7px 9px;font:10px var(--mono);letter-spacing:.55px;white-space:nowrap;}
+.voice-contact-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+.voice-contact-card{display:flex;flex-direction:column;gap:11px;padding:19px;background:#111f31;border:1px solid #30425a;border-radius:12px;}
+.voice-contact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px;}
+.voice-contact-avatar{display:flex;width:49px;height:49px;align-items:center;justify-content:center;color:#62d9e8;
+ border:1px solid #2d6678;border-radius:13px;background:#0e3241;}
+.voice-contact-card strong{font-size:15px;}
+.voice-contact-card p{min-height:42px;}
+.voice-contact-code{font:10px var(--mono);letter-spacing:1px;color:#6789a6;}
+.voice-contact-card .voice-call-primary{margin-top:auto;width:100%;}
+.voice-page-footer-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;}
+.voice-information,.voice-incoming-demo{border:1px solid #2b3b52;background:#122034;border-radius:11px;padding:18px;display:flex;align-items:flex-start;gap:13px;}
+.voice-information svg{color:#79bde2;flex:none;}
+.voice-information strong,.voice-incoming-demo strong{display:block;font-size:13px;margin:0 0 7px;}
+.voice-incoming-demo{display:block;}
+.voice-incoming-demo .voice-call-secondary{margin-top:14px;width:100%;}
+
+/* Fixed overlay keeps the call window over all dashboard panels and side navigation. */
+.voice-modal-backdrop{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;
+ padding:16px;background:#030911d9;backdrop-filter:blur(9px);}
+.voice-modal{width:min(100%,460px);max-height:calc(100dvh - 32px);overflow-y:auto;border-radius:17px;
+ background:radial-gradient(ellipse at 50% 20%,#1a4b59 0%,transparent 49%),linear-gradient(180deg,#142438,#0c1525 92%);
+ border:1px solid #3a5e70;box-shadow:0 22px 95px #000b,0 0 0 1px #65b8c618;}
+.voice-modal-top{display:flex;align-items:center;gap:12px;padding:19px 19px 10px;font:10px var(--mono);
+ letter-spacing:.5px;color:#94bcd0;}
+.voice-modal-top>span:first-child{flex:1;}
+.voice-modal-top b{color:#eafcff;font-weight:700;}
+.voice-modal-demo{background:#194251;border:1px solid #32899a;border-radius:5px;padding:6px;color:#71eff6;}
+.voice-modal-close{border:1px solid #354a62;color:#bad1df;background:#172838;display:flex;align-items:center;
+ justify-content:center;width:32px;height:32px;border-radius:8px;}
+.voice-modal-close:hover{background:#293d54;}
+.voice-modal-body{text-align:center;padding:12px 28px 13px;}
+.voice-modal-orbit{width:154px;height:154px;border:1px solid #2a6c7f;border-radius:50%;
+ display:flex;justify-content:center;align-items:center;margin:4px auto 20px;box-shadow:0 0 0 12px #3fbed108,0 0 0 26px #3fbed106;}
+.voice-avatar-orbit{width:102px;height:102px;display:flex;align-items:center;justify-content:center;
+ color:#90f0fa;border:1px solid #3cabbc;background:linear-gradient(145deg,#1c596c,#174256);border-radius:50%;
+ box-shadow:0 0 44px #1dc9de24;}
+.voice-avatar-connected{border-color:#44d5a5;color:#a1f8d5;box-shadow:0 0 42px #32d6a04a;}
+.voice-avatar-dialing,.voice-avatar-ringing{animation:voice-breathe 1.7s ease-in-out infinite;}
+@keyframes voice-breathe{50%{transform:scale(1.07);box-shadow:0 0 42px #29d0ef55;}}
+.voice-call-status{display:flex;align-items:center;justify-content:center;gap:9px;font:10px var(--mono);
+ letter-spacing:.4px;color:#85d5df;}
+.voice-status-connected{color:#67e8ba;}
+.voice-status-connected .voice-demo-dot{background:#32d6a0;box-shadow:0 0 0 4px #32d6a01a;}
+.voice-status-ended{color:#b2b9ca;}
+.voice-status-ended .voice-demo-dot{background:#75839a;box-shadow:none;}
+.voice-modal-body h2{font-size:25px;font-weight:760;margin:13px 0 6px;letter-spacing:-.7px;}
+.voice-modal-body>p{margin:0;color:#95acc4;font-size:12px;line-height:1.55;}
+.voice-call-timer{display:flex;align-items:center;justify-content:center;gap:8px;margin:19px 0 7px;
+ color:#9fbed2;font:15px var(--mono);font-variant-numeric:tabular-nums;}
+.voice-call-waveform{height:51px;display:flex;align-items:center;justify-content:center;gap:3px;margin:8px auto 11px;}
+.voice-call-waveform>span{width:3px;border-radius:3px;background:linear-gradient(#83ebf5,#2c8299);opacity:.35;}
+.voice-modal:has(.voice-status-connected) .voice-call-waveform>span{opacity:.8;animation:voice-wave 950ms ease-in-out infinite alternate;}
+.voice-modal:has(.voice-status-connected) .voice-call-waveform>span:nth-child(3n){animation-delay:240ms;}
+.voice-modal:has(.voice-status-connected) .voice-call-waveform>span:nth-child(4n){animation-delay:480ms;}
+@keyframes voice-wave{from{transform:scaleY(.44);}to{transform:scaleY(1.2);}}
+.voice-modal-body p.voice-call-privacy{font-size:10px;color:#758ba3;max-width:340px;margin:0 auto;line-height:1.65;}
+.voice-modal-controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;padding:15px 24px 24px;}
+.voice-control{min-height:79px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:9px;border-radius:11px;background:#1a2c42;color:#d4e6ed;border:1px solid #38546a;}
+.voice-control>span{font-size:10px;font-weight:650;}
+.voice-control:hover:not(:disabled){background:#264159;}
+.voice-control-off{border-color:#bf9254;color:#f6ca85;background:#322b27;}
+.voice-control-end,.voice-call-decline{background:#7e3542;color:#fff0f2;border-color:#a84f58;}
+.voice-control-end:hover:not(:disabled),.voice-call-decline:hover:not(:disabled){background:#a34350;}
+.voice-call-accept{background:#177e65;color:#eefef9;border-color:#22a887;}
+.voice-call-accept:hover{background:#219c7c;}
+.voice-incoming-actions{padding:20px 24px 25px;display:grid;grid-template-columns:1fr 1fr;}
+.voice-incoming-actions button{min-height:53px;font-size:12px;}
+.voice-call-ended-actions{text-align:center;padding:10px 24px 25px;}
+.voice-call-ended-actions p{font-size:12px;color:#a3b9cb;}
+.voice-call-ended-actions .voice-call-primary{width:100%;}
+.voice-modal-bottom{padding:13px 20px;border-top:1px solid #293b50;display:flex;justify-content:space-between;
+ gap:12px;color:#7790a5;font:9px var(--mono);letter-spacing:.65px;}
+.voice-modal-bottom>span{color:#6b819b;text-align:right;}
+@media(max-width:970px){.voice-contact-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.voice-page-footer-grid{grid-template-columns:1fr;}}
+@media(max-width:600px){
+ .voice-contact-grid{grid-template-columns:1fr;}
+ .voice-page-hero{padding:19px;flex-wrap:wrap;}
+ .voice-page-hero h2{font-size:19px;}
+ .voice-hero-icon{width:50px;height:50px;}
+ .voice-contact-card p{min-height:0;}
+ .voice-modal-top{padding:14px 13px 5px;}
+ .voice-modal-body{padding:10px 18px 9px;}
+ .voice-modal-body h2{font-size:22px;}
+ .voice-modal-controls{padding:13px 13px 17px;gap:6px;}
+ .voice-control>span{font-size:9px;}
+ .voice-modal-bottom{flex-wrap:wrap;}
+}
+@media(prefers-reduced-motion:reduce){
+ .voice-avatar-dialing,.voice-avatar-ringing,.voice-modal:has(.voice-status-connected) .voice-call-waveform>span{animation:none;}
+ .voice-call-primary{transition:none;}
+}
+
+
+/* ASTROVITAL LIVE RADIO */
+/* Full-duplex WebSocket transport with user-held half-duplex microphone PTT. */
+.live-radio-panel{display:flex;flex-direction:column;gap:20px;max-width:980px;}
+.live-radio-top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;}
+.radio-eyebrow{font:10px var(--mono);letter-spacing:.8px;color:#6cd8e9;}
+.live-radio-top h3{font-size:20px;margin:8px 0;}
+.live-radio-top p{font-size:11px;color:#91abc2;line-height:1.6;margin:0;}
+.radio-live-badge{font:10px var(--mono);color:#7ee8b7;border:1px solid #27614d;
+ background:#16392f;border-radius:6px;padding:9px 11px;white-space:nowrap;}
+.live-radio-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.live-radio-status-grid>div{display:flex;align-items:center;flex-wrap:wrap;gap:7px;
+ border:1px solid #33465d;border-radius:9px;padding:13px;background:#122137;}
+.radio-indicator{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;}
+.radio-indicator.is-online{background:#35d59f;box-shadow:0 0 0 3px #35d59f26;}
+.radio-indicator.is-offline{background:#8995a7;box-shadow:0 0 0 3px #8995a71c;}
+.live-radio-status-grid b{font-size:12px;color:#e6f2fc;}
+.live-radio-status-grid small{font-size:11px;color:#9cb2c6;display:block;flex-basis:100%;padding-left:16px;}
+.live-radio-listening,.live-radio-ptt{border:1px solid #354960;background:#101f32;border-radius:12px;padding:18px;}
+.live-radio-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+.live-radio-section-title b{font-size:13px;color:#e5f5ff;}
+.live-radio-section-title span{font:10px var(--mono);color:#80a1b8;}
+.live-radio-section-title .radio-transmitting{color:#5cf0b2;}
+.live-radio-controls{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:22px;}
+.radio-primary,.radio-secondary{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+ border-radius:8px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s;}
+.radio-primary{border:1px solid #53cbe1;background:#39bed5;color:#061d29;}
+.radio-primary:hover{background:#81e9f2;}
+.radio-secondary{border:1px solid #54728a;background:#183249;color:#c8f0f5;}
+.radio-secondary:hover{background:#244a61;}
+.live-radio-speaker-note{font-size:11px;color:#93a9bf;flex:1;line-height:1.6;min-width:175px;}
+.live-radio-vu-heading{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;
+ color:#a9c3d5;font:10px var(--mono);letter-spacing:.5px;}
+.live-radio-vu-track{height:18px;border-radius:6px;border:1px solid #42556d;background:repeating-linear-gradient(90deg,#1d3145 0 8px,#102235 8px 11px);overflow:hidden;}
+.live-radio-vu-fill{display:block;height:100%;width:0;background:linear-gradient(90deg,#3ce1b1 0%,#5cdecd 48%,#e6d765 76%,#f0775a 100%);transition:width 90ms linear;box-shadow:0 0 18px #3cdfe25a;}
+.live-radio-muted-hint{display:block;margin-top:10px;color:#7d97ad;font-size:11px;line-height:1.6;}
+.radio-ptt-button{width:100%;min-height:82px;border-radius:12px;border:1px solid #328da0;
+ background:linear-gradient(135deg,#153e50,#183148);color:#d5f7ff;display:flex;
+ align-items:center;justify-content:center;gap:14px;font-size:15px;font-weight:750;
+ cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;transition:background .12s;}
+.radio-ptt-button:hover{background:#225568;}
+.radio-ptt-button.is-talking{background:linear-gradient(125deg,#156e55,#164536);
+ border-color:#40d7a7;color:#f0fffb;box-shadow:0 0 0 4px #2bcd9d14;}
+.radio-ptt-icon{font-size:24px;line-height:1;color:#5cd6df;}
+.radio-ptt-button.is-talking .radio-ptt-icon{color:#81ffd2;animation:radio-pulse 1s infinite alternate;}
+@keyframes radio-pulse{to{opacity:.35;transform:scale(1.3)}}
+.live-radio-ptt>small{font-size:11px;color:#889fb4;line-height:1.6;display:block;margin-top:10px;}
+.live-radio-error{padding:13px 16px;border-radius:9px;border:1px solid #a76e4d;
+ background:#392b27;color:#ffdbbf;font-size:12px;line-height:1.7;overflow-wrap:anywhere;}
+.live-radio-footer{border-top:1px solid #293c51;padding-top:14px;font-size:11px;color:#879bad;line-height:1.7;}
+.live-radio-summary{display:flex;flex-direction:column;gap:12px;}
+.live-radio-summary .live-radio-row{display:flex;gap:9px;align-items:center;color:#96dbe7;}
+.live-radio-summary strong{font:10px var(--mono);letter-spacing:.3px;}
+.live-radio-summary p{margin:0;color:#b8cde0;font-size:12px;line-height:1.6;}
+.live-radio-summary .radio-primary{width:100%;}
+.live-radio-summary small{font-size:10px;color:#899eb3;line-height:1.6;}
+@media(max-width:650px){.live-radio-status-grid{grid-template-columns:1fr;}.live-radio-top{flex-wrap:wrap;}
+.radio-ptt-button{min-height:92px;font-size:12px;}.live-radio-status-grid small{flex-basis:auto;}
+.live-radio-status-grid>div{display:grid;grid-template-columns:auto 1fr;}.live-radio-status-grid>div small{grid-column:2;padding:0;}}
+@media(prefers-reduced-motion:reduce){.radio-ptt-button.is-talking .radio-ptt-icon{animation:none;}}
+
+
+/* Explicit, user-initiated microphone permission request (never auto-record). */
+.radio-mic-permission{display:flex;align-items:center;justify-content:space-between;gap:14px;
+ border:1px solid #39526c;background:#122c3e;border-radius:10px;padding:13px 14px;margin-bottom:13px;flex-wrap:wrap;}
+.radio-mic-permission>div{display:flex;flex-direction:column;gap:5px;}
+.radio-mic-permission strong{font-size:12px;color:#e4f5fd;}
+.radio-mic-state{font-size:11px;color:#c1d3e5;line-height:1.5;}
+.radio-mic-state-granted{color:#81e6ba;}
+.radio-mic-state-denied,.radio-mic-state-insecure{color:#ffc394;}
+.radio-mic-state-requesting{color:#81ccef;}
+.radio-mic-permission-button{min-width:175px;}
+.radio-mic-permission-button:disabled{opacity:.56;cursor:wait;}
+.radio-mic-security-warning{border:1px solid #ad714e;border-radius:8px;background:#342820;color:#f7cbaa;
+ padding:10px 12px;font-size:11px;line-height:1.8;overflow-wrap:anywhere;}
+.radio-mic-consent-note{display:block;margin:0 0 13px;font-size:11px;line-height:1.6;color:#98b5c8;}

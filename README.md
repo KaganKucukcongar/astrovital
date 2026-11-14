@@ -92,3 +92,7 @@ The Raspberry Pi API now accepts BMP180 temperature, pressure and barometric alt
 The HADSE page adds an **opt-in CSV calibration session**. A consenting participant's measured (never simulated) packets may be recorded to a local, access-restricted CSV. The first 20 quality-accepted readings establish per-channel personal baselines. Subsequent repeated deviations yield explainable, **unverified anomaly candidates** and suggestions to recheck readings or obtain human review. This is a rule-based research prototype, **not trained ML or a clinically validated diagnosis system**. The existing HADSE quality gate is unchanged. All CSV files, local database records, credentials and deployment backups are excluded from version control.
 
 Read [the calibration guide](docs/HADSE_CALIBRATION.md) for consent, operating instructions, limitations and the optional local CSV transfer helper. The backend calibration module was exercised with isolated unit tests; the frontend has 21 passing tests and its production build was verified. The active calibration session remains off until explicitly started.
+
+## Canlı telsiz ve mikrofon izin paneli
+
+ESP32 ve Raspberry Pi arasında iki yönlü 8 kHz PCM WebSocket ses köprüsü, dashboard'da VU metre ve bas-konuş (PTT), ayrıca açık kullanıcı mikrofon izin kontrolü eklendi. Ayrıntılar, kısıtlar ve güvenli yerel Chrome kısayolu kurulumu için [Canlı Telsiz Rehberi](docs/LIVE_AUDIO.md) dosyasına bakın. Fiziksel ses donanımının kalitesi henüz doğrulanmadı.

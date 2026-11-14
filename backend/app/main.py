@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
-from fastapi import FastAPI, Query, Request, HTTPException
+from fastapi import FastAPI, Query, Request, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.blackbox import BlackBox
+from app.audio_bridge import AudioBridge
 from app.calibration import CalibrationRecorder
 from app.confidence import assess_confidence
 from app.hadse import evaluate
@@ -32,6 +33,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     blackbox = BlackBox(db_path or Path(os.getenv("ASTROVITAL_DB_PATH", "data/mission_blackbox.sqlite3")))
     lock = Lock()
     calibration = CalibrationRecorder(blackbox.path.parent / "calibration_sessions")
+    audio_bridge = AudioBridge()  # Async and independent of the telemetry Lock.
 
     def require_operator_ethernet(request: Request) -> None:
         # Measurement capture is explicitly opt-in and never remotely
@@ -87,6 +89,14 @@ def create_app(db_path: Path | None = None) -> FastAPI:
                 "reason": new_route["reason"],
                 "terrain_source": new_route["terrain_source"],
             })
+
+    @api.websocket("/ws/audio")
+    async def audio_ws(websocket: WebSocket, role: str | None = None) -> None:
+        await audio_bridge.handle(websocket, role)
+
+    @api.get("/api/v1/audio/status")
+    async def audio_status() -> dict[str, bool]:
+        return await audio_bridge.status()
 
     @api.get("/health")
     def health() -> dict:
