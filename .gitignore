@@ -36,3 +36,7 @@ offline_wheels*/
 *.log
 .DS_Store
 Thumbs.db
+
+# Consent-based physiological calibration exports (never commit)
+**/session_*.csv
+AstroVital_Kalibrasyon_CSV/

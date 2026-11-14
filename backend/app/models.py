@@ -15,6 +15,23 @@ class TelemetryIn(BaseModel):
     spo2_pct: float | None = Field(default=None, ge=0, le=100)
     acceleration_g: float = Field(ge=0, le=16)
     signal_quality: float = Field(ge=0, le=1)
+    # Optional environmental and navigation measurements from Arduino Nano ESP32.
+    # These are kept separate from the physiological HADSE confidence gate.
+    mag_x_ut: float | None = Field(default=None, allow_inf_nan=False)
+    mag_y_ut: float | None = Field(default=None, allow_inf_nan=False)
+    mag_z_ut: float | None = Field(default=None, allow_inf_nan=False)
+    heading_deg: float | None = Field(default=None, ge=0, le=360, allow_inf_nan=False)
+    heading_calibrated: bool | None = None
+    temperature_c: float | None = Field(default=None, allow_inf_nan=False)
+    pressure_hpa: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    altitude_m: float | None = Field(default=None, allow_inf_nan=False)
+    steps_total: int | None = Field(default=None, ge=0)
+    stride_length_m: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+
+class CalibrationStartIn(BaseModel):
+    # Explicit opt-in; no name, age, or identity is sent to the server.
+    consent: bool
 
 
 class SelfCheckIn(BaseModel):

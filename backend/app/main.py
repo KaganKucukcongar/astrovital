@@ -1,18 +1,21 @@
 """HTTP entrypoint for the first, intentionally bounded vertical slice."""
 
 import os
+import ipaddress
+import logging
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.blackbox import BlackBox
+from app.calibration import CalibrationRecorder
 from app.confidence import assess_confidence
 from app.hadse import evaluate
-from app.models import SelfCheckIn, SelfCheckOut, SimulationStepIn, TelemetryIn
+from app.models import CalibrationStartIn, SelfCheckIn, SelfCheckOut, SimulationStepIn, TelemetryIn
 from app.routes import route_plan, ROUTES
 from app.simulator import make_simulated_packet
 
@@ -28,6 +31,19 @@ def create_app(db_path: Path | None = None) -> FastAPI:
 
     blackbox = BlackBox(db_path or Path(os.getenv("ASTROVITAL_DB_PATH", "data/mission_blackbox.sqlite3")))
     lock = Lock()
+    calibration = CalibrationRecorder(blackbox.path.parent / "calibration_sessions")
+
+    def require_operator_ethernet(request: Request) -> None:
+        # Measurement capture is explicitly opt-in and never remotely
+        # controllable by ordinary AstroHotspot clients (192.168.4.0/24).
+        host = request.client.host if request.client else ""
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Yerel operatör bağlantısı gerekli")
+        if not (address.is_loopback or address in ipaddress.ip_network("192.168.10.0/24")):
+            raise HTTPException(status_code=403, detail="Kalibrasyon yalnızca Ethernet operatör bağlantısından yönetilir")
+
     state: dict[str, object | None] = {
         "telemetry": None, "assessment": None, "self_check": None,
         "link_status": "unknown", "simulation_scenario": None,
@@ -87,6 +103,21 @@ def create_app(db_path: Path | None = None) -> FastAPI:
             state["telemetry"] = packet
             update_assessment(assessment)
             blackbox.append("telemetry_assessed", assessment)
+            # CSV is written ONLY during a consented, explicitly started session.
+            # A recording failure must never interrupt the ESP32 telemetry API.
+            try:
+                previous_count = calibration.anomaly_count
+                calibration.record(packet)
+                if calibration.anomaly_count > previous_count and calibration.current_anomaly:
+                    blackbox.append("calibration_candidate_anomaly", {
+                        "session_id": calibration.session_id,
+                        "type": calibration.current_anomaly["type"],
+                        "verified": False,
+                    })
+            except Exception:
+                logging.exception("Calibration CSV recording error; live telemetry remains available")
+                calibration.active = False
+                calibration.last_quality_warning = "CSV kaydı durdu; yerel diski kontrol edin."
             state["link_status"] = "connected"
             return assessment
 
@@ -125,6 +156,36 @@ def create_app(db_path: Path | None = None) -> FastAPI:
                 blackbox.append("decision_updated", assessment)
             return payload
 
+    @api.post("/api/v1/calibration/start")
+    def start_calibration(payload: CalibrationStartIn, request: Request) -> dict:
+        require_operator_ethernet(request)
+        with lock:
+            try:
+                result = calibration.start(consent=payload.consent)
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
+            blackbox.append("calibration_started", {"session_id": calibration.session_id})
+            return result
+
+    @api.post("/api/v1/calibration/stop")
+    def stop_calibration(request: Request) -> dict:
+        require_operator_ethernet(request)
+        with lock:
+            try:
+                result = calibration.stop()
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
+            blackbox.append("calibration_stopped", {
+                "session_id": calibration.session_id,
+                "sample_count": calibration.record_count,
+            })
+            return result
+
+    @api.get("/api/v1/calibration/status")
+    def calibration_status() -> dict:
+        with lock:
+            return calibration.status()
+
     @api.get("/api/v1/mission/status")
     def mission_status() -> dict:
         with lock:
@@ -152,6 +213,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
                 "link_status": state["link_status"],
                 "simulation_scenario": state["simulation_scenario"],
                 "route_plan": routing,
+                "calibration": calibration.status(),
             }
 
     @api.get("/api/v1/events")

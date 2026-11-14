@@ -452,3 +452,27 @@ a { color:inherit; }
 }
 
 .demo-console.overview-hide{display:none;}
+
+/* Actual ESP32 environmental telemetry (not a synthetic demo). */
+.figma-env-source{color:#93a9bf;font:9px var(--mono);}
+.figma-env-note{color:#71859b;font-size:10px;line-height:1.5;display:block;margin-top:8px;}
+.figma-detail-list .stat-line{flex-wrap:wrap;gap:5px;}
+.figma-detail-list .stat-line strong{font-size:10px;text-align:right;white-space:normal;}
+@media (max-width:620px){.figma-bottom-grid .panel-head{align-items:flex-start;gap:7px;}.figma-env-source{font-size:8px;}}
+
+
+/* Consent-gated, non-clinical telemetry calibration status. */
+.calibration-panel {display:flex;flex-direction:column;gap:17px;}
+.calibration-info {display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12px;color:var(--muted);line-height:1.6;}
+.calibration-stats {border:1px solid var(--border);border-radius:9px;padding:10px 15px;background:var(--surface2);}
+.calibration-stats .stat-line strong {max-width:72%;text-align:right;overflow-wrap:anywhere;white-space:normal;}
+.calibration-alert {padding:14px 16px;border-radius:9px;background:#3c2c1c;border:1px solid #8c5e30;color:#ffe1a8;}
+.calibration-alert strong {font-size:11px;letter-spacing:0.6px;}
+.calibration-alert p {font-size:13px;line-height:1.6;color:#fff0d6;}
+.calibration-alert small {font-size:11px;opacity:0.85;line-height:1.5;display:block;}
+.calibration-quality {border:1px solid #976e36;background:#2b271b;color:#eec687;padding:10px 13px;border-radius:8px;font-size:12px;}
+.calibration-consent {display:flex;align-items:flex-start;gap:10px;cursor:pointer;color:var(--text);font-size:12px;line-height:1.65;}
+.calibration-consent input {accent-color:var(--cyan);margin-top:5px;width:17px;height:17px;flex:0 0 auto;}
+.calibration-actions {display:flex;flex-wrap:wrap;gap:13px;align-items:center;}
+.calibration-actions small {display:block;color:var(--muted);font-size:11px;line-height:1.5;flex:1;min-width:240px;}
+@media (max-width:620px){.calibration-stats .stat-line strong{max-width:60%;}}

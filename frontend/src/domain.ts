@@ -14,6 +14,14 @@ export type Sample = {
   spo2: number | null;
   acceleration: number;
   quality: number;
+  temperatureC: number | null;
+  pressureHpa: number | null;
+  altitudeM: number | null;
+  headingDeg: number | null;
+  headingCalibrated: boolean;
+  magX: number | null;
+  magY: number | null;
+  magZ: number | null;
 };
 
 export type Assessment = {
@@ -66,7 +74,9 @@ export function createDemoSample(scenario: Scenario, sequence: number, now = Dat
   const quality = scenario === 'poor_signal' ? 0.22 : scenario === 'high_motion' ? 0.75 : 0.96;
   const observedAt = new Date(now + (scenario === 'future_data' ? 12000 : scenario === 'stale_data' ? -12000 : 0)).toISOString();
   return { id: 'demo:' + sequence, deviceId: 'ASTRO-X-DEMO', sequence, observedAt,
-    source: 'simulated', heartRate, spo2, acceleration, quality };
+    source: 'simulated', heartRate, spo2, acceleration, quality,
+    temperatureC: null, pressureHpa: null, altitudeM: null, headingDeg: null,
+    headingCalibrated: false, magX: null, magY: null, magZ: null };
 }
 
 export function assessSample(sample: Sample | null, selfCheck: CheckStatus | null, now = Date.now()): Assessment {
@@ -105,6 +115,18 @@ export function assessSample(sample: Sample | null, selfCheck: CheckStatus | nul
 
 export function mapApiTelemetry(t: Record<string, unknown>): Sample {
   const num = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) ? v : null;
+  // The firmware sends 0 for unavailable BMP180 readings. A zero temperature
+  // itself is valid; use pressure > 0 to distinguish missing BMP180 data.
+  const pressure = num(t.pressure_hpa);
+  const bmpAvailable = pressure !== null && pressure > 0;
+  // Firmware sends an all-zero magnetometer vector when unavailable.
+  // Heading 0° remains a valid direction when a nonzero horizontal vector exists.
+  const rawMagX = num(t.mag_x_ut);
+  const rawMagY = num(t.mag_y_ut);
+  const rawMagZ = num(t.mag_z_ut);
+  const magAvailable = rawMagX !== null && rawMagY !== null && rawMagZ !== null &&
+    Math.hypot(rawMagX, rawMagY) > 0.01;
+  const heading = num(t.heading_deg);
   return {
     id: String(t.device_id ?? 'device') + ':' + String(t.sequence ?? 0) + ':' + String(t.observed_at ?? ''),
     deviceId: String(t.device_id ?? '—'), sequence: Number(t.sequence ?? 0),
@@ -114,7 +136,30 @@ export function mapApiTelemetry(t: Record<string, unknown>): Sample {
     // Sıfır SpO₂ bir ölçüm değildir: cihaz henüz parmak algılamıyor olabilir.
     spo2: num(t.spo2_pct) !== null && num(t.spo2_pct)! > 0 && num(t.spo2_pct)! <= 100 ? num(t.spo2_pct) : null,
     acceleration: num(t.acceleration_g) ?? 0, quality: num(t.signal_quality) ?? 0,
+    temperatureC: bmpAvailable ? num(t.temperature_c) : null,
+    pressureHpa: bmpAvailable ? pressure : null,
+    altitudeM: bmpAvailable ? num(t.altitude_m) : null,
+    headingDeg: magAvailable && heading !== null && heading >= 0 && heading <= 360 ? heading : null,
+    headingCalibrated: t.heading_calibrated === true,
+    magX: magAvailable ? rawMagX : null,
+    magY: magAvailable ? rawMagY : null,
+    magZ: magAvailable ? rawMagZ : null,
   };
+}
+
+export function compassDirection(degrees: number | null): string {
+  if (degrees === null || !Number.isFinite(degrees)) return '—';
+  const labels = ['K', 'KD', 'D', 'GD', 'G', 'GB', 'B', 'KB'];
+  return labels[Math.round((((degrees % 360) + 360) % 360) / 45) % 8];
+}
+
+// Canlı iletişim ile olçümün gözlem zamanı farklı şeylerdir. ESP32 RTC'si
+// sunucu saatinden birkaç saniye geride olabilir. Akış, yeni paketlerin
+// sunucu/tarayıcıya ulaşma zamanına göre izlenir; HADSE zaman kontrolü aynı kalır.
+export function isSensorStreamActive(sample: Sample | null, lastReceivedAt: number | null, now = Date.now()): boolean {
+  if (!sample || sample.source !== 'measured' || lastReceivedAt === null) return false;
+  const elapsed = now - lastReceivedAt;
+  return Number.isFinite(elapsed) && elapsed >= -2000 && elapsed <= 6500;
 }
 
 export function isLiveMeasured(sample: Sample | null, now = Date.now()): boolean {

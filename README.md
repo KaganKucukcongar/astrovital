@@ -84,3 +84,11 @@ The API connectivity indicator is now resilient to transient polling failures. R
 Run `cd frontend && npm test && npm run build` to execute **16 frontend tests** and the production build (verified on November 14, 2026). The tested Raspberry Pi deployment uses prebuilt static frontend files; compiled assets, device credentials and runtime databases are not committed.
 
 **Validation scope:** The updated frontend was tested with a real Raspberry Pi API and simulated network-block scenarios. Physical ESP32 telemetry had been observed reaching the Pi, but that does not constitute medical validation, and pixel-perfect parity for every Figma page was not independently verified.
+
+## November 14, 2026 environmental telemetry and HADSE calibration
+
+The Raspberry Pi API now accepts BMP180 temperature, pressure and barometric altitude, plus magnetometer and compass telemetry. The dashboard displays measurements with source, freshness and compass-calibration indications; missing readings are not fabricated. The API service and ESP32 stream indicators are independent, so device clock skew does not falsely mark an accessible API offline.
+
+The HADSE page adds an **opt-in CSV calibration session**. A consenting participant's measured (never simulated) packets may be recorded to a local, access-restricted CSV. The first 20 quality-accepted readings establish per-channel personal baselines. Subsequent repeated deviations yield explainable, **unverified anomaly candidates** and suggestions to recheck readings or obtain human review. This is a rule-based research prototype, **not trained ML or a clinically validated diagnosis system**. The existing HADSE quality gate is unchanged. All CSV files, local database records, credentials and deployment backups are excluded from version control.
+
+Read [the calibration guide](docs/HADSE_CALIBRATION.md) for consent, operating instructions, limitations and the optional local CSV transfer helper. The backend calibration module was exercised with isolated unit tests; the frontend has 21 passing tests and its production build was verified. The active calibration session remains off until explicitly started.
