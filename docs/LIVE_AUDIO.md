@@ -1,29 +1,29 @@
-# AstroVital X · Canlı WebSocket telsizi
+# AstroVital X · Live WebSocket radio
 
-## Ses formatı ve köprü
+## Audio format and bridge
 - WebSocket: `ws://<Pi-IP>:8000/ws/audio?role=esp32` ve `?role=dashboard`.
-- İkili ses: 8000 Hz, 8-bit unsigned mono PCM, 256 bayt (32 ms), sessizlik 128.
-- FastAPI köprüsü asenkrondur; yeniden bağlanan cihaz eski rol soketini devralır. Yavaş alıcıda eski bloklar atılır.
-- `GET /api/v1/audio/status` bağlantı durumlarını döndürür. Ses sunucu tarafında kaydedilmez.
-- `backend/pyproject.toml` gerekli `websockets>=14,<17` bağımlılığını içerir.
+- Binary audio: 8000 Hz, 8-bit unsigned mono PCM, 256 bytes (32 ms), silence 128.
+- The FastAPI bridge is asynchronous; The reconnected device inherits the old role socket. In the slow receiver, old blocks are discarded.
+- `GET /api/v1/audio/status` returns connection statuses. Audio is not recorded on the server side.
+- `backend/pyproject.toml` contains the required `websockets>=14,<17` dependency.
 
 ## Dashboard ve PTT
-- **Sesli İletişim (Telsiz)** ekranından **Sesi Aç** ile WebSocket ve AudioContext başlatılır.
-- Gelen PCM blokları Float32'ye çevrilir, hoparlöre zamanlanır ve VU metrede gösterilir.
-- **PTT** basılıyken mikrofon akışı 8 kHz PCM bloklarına dönüşür; bırakılınca mikrofon kapanır.
-- Görsel arama popup'ları ayrı demodur.
+- WebSocket and AudioContext are initialized by clicking **Volume Up** from the **Voice Communication (Radio)** screen.
+- Incoming PCM blocks are converted to Float32, timed to the speaker, and displayed on the VU meter.
+- While **PTT** is pressed, the microphone stream changes to 8 kHz PCM blocks; When released, the microphone turns off.
+- Visual search popups are a separate demo.
 
-## HTTP yerel ağda mikrofon
-Chrome genellikle `http://192.168.4.1:5173` üzerinde `getUserMedia` erişimini engeller. Sadece demo için ayrı bir Chrome profili/kısayolu oluşturabilirsiniz:
+## Microphone in HTTP local network
+Chrome usually blocks access to `getUserMedia` on `http://192.168.4.1:5173`. You can create a separate Chrome profile/shortcut just for the demo:
 ```powershell
 powershell -File .\tools\create_radio_chrome_shortcut.ps1
 ```
-Yalnızca `http://192.168.10.1:5173` ve `http://192.168.4.1:5173` adreslerini o Chrome oturumunda güvenilir kabul ettirir. **Mikrofon iznini otomatik vermez.** Kullanıcı panelde **Mikrofon İznini İste** seçeneğine basarak Chrome iznini onaylar. Kontrol için açılan geçici mikrofon akışı hemen durur; gerçek yayın yalnızca PTT basılıyken yapılır.
+It only makes `http://192.168.10.1:5173` and `http://192.168.4.1:5173` addresses trustworthy in that Chrome session. **It does not grant microphone permission automatically.** The user confirms the Chrome permission by pressing the **Request Microphone Permission** option on the panel. The temporary microphone stream that is turned on for control stops immediately; actual broadcasting occurs only when PTT is pressed.
 
-**Güvenlik:** `--unsafely-treat-insecure-origin-as-secure` tarayıcı korumasını gevşetir. Sadece kontrollü yerel ağ demosunda kullanın. Üretim sistemi için HTTPS/WSS, kimlik doğrulaması ve ağ erişim kontrolü gerekir. Bu `ws://` kanalı şifresiz ve kimlik doğrulamasızdır; port 8000 internete açılmamalı.
+**Security:** `--unsafely-treat-insecure-origin-as-secure` relaxes browser protection. Use only in controlled local network demo. The production system requires HTTPS/WSS, authentication, and network access control. This `ws://` channel is unencrypted and unauthenticated; Port 8000 should not be opened to the internet.
 
-## Donanım ve doğrulama
-- ESP32'nin ses WebSocket'i bağlansa bile A0 mikrofon ve D5 hoparlörün fiziksel kalitesi doğrulanmış sayılmaz. A0 girişinde güçlü ofset/parazit gözlemlendi; ses seviyesini düşük tutun.
-- `cd frontend && npm test && npm run build` (40 test başarılı).
-- `backend/tests/audio_integration_checks.py`, yalnızca izole `127.0.0.1:18084` test sunucusunda karşılıklı ses, bağlantı devralma ve ses sırasında HTTP/telemetri kontrollerini yapar. Üretim veritabanına karşı çalıştırmayın.
-- Bu değişiklik, ESP32 firmware'ini düzenlemedi; kullanıcıya ait yerel Wi-Fi kimlik bilgilerini kaynak depoya eklemeyin.
+## Hardware and verification
+- Even if the ESP32's audio WebSocket is connected, the physical quality of the A0 microphone and D5 speaker is not verified. Strong offset/noise observed at input A0; Keep the volume low.
+- `cd frontend && npm test && npm run build` (40 tests passed).
+- `backend/tests/audio_integration_checks.py` does HTTP/telemetry checks during mutual audio, connection takeover and audio only on the isolated `127.0.0.1:18084` test server. Do not run against the production database.
+- This change did not edit the ESP32 firmware; Do not add the user's local Wi-Fi credentials to the source repository.

@@ -129,7 +129,7 @@ class AstroNavEngine:
             session.observed_sequence = self._latest["sequence"]
             current_steps = self._latest["steps_total"]
             if current_steps is None:
-                session.warnings = ["Adım sensörü verisi yok; konum değiştirilmiyor."]
+                session.warnings = ["No stride sensor data; The location is not changed."]
                 session.step_anchor = None
                 return
             previous = session.step_anchor
@@ -138,16 +138,16 @@ class AstroNavEngine:
                 return
             delta_steps = current_steps - previous
             if delta_steps < 0 or delta_steps > 8:
-                session.warnings = ["Adım sayacı sıfırlandı veya sıçrama var; ilerleme atlandı."]
+                session.warnings = ["Step counter has been reset or there is a jump; progress skipped."]
                 return
             if delta_steps == 0:
                 return
             if not calibrated or self._latest["heading_deg"] is None:
-                session.warnings = ["Pusula kalibrasyonu veya yön verisi eksik; adımlar işlenmedi."]
+                session.warnings = ["Compass calibration or bearing data missing; steps not processed."]
                 return
             stride_m = self._latest["stride_length_m"]
             if stride_m is None:
-                session.warnings = ["Kalibre adım uzunluğu eksik; mesafe hesaplanmadı."]
+                session.warnings = ["Calibrated stride length is missing; distance not calculated."]
                 return
             metres = delta_steps * stride_m
             previous_position = session.pos
@@ -160,11 +160,11 @@ class AstroNavEngine:
     def _valid_heading(self, s: NavSession) -> tuple[float | None, str]:
         t = self._latest
         if not t or t["device_id"] != s.device_id:
-            return None, "Bu cihaza ait canlı pusula telemetrisi yok."
+            return None, "There is no live compass telemetry for this device."
         if time.monotonic() - self._latest_received > NAV_SOURCE_TTL_S:
-            return None, "Pusula telemetrisi güncel değil."
+            return None, "Compass telemetry is out of date."
         if not t["heading_calibrated"] or t["heading_deg"] is None:
-            return None, "Pusula kalibrasyonu gerekli."
+            return None, "Compass calibration required."
         return t["heading_deg"], ""
 
     def _check_arrival(self, s: NavSession, previous: tuple[float, float] | None = None) -> None:
@@ -185,16 +185,16 @@ class AstroNavEngine:
     def start(self, payload: NavStartIn) -> dict:
         with self._lock:
             if self._session is not None and self._session.status == "active":
-                raise HTTPException(409, "Aktif görevi önce sıfırlayın.")
+                raise HTTPException(409, "Reset the active duty first.")
             t = self._latest
             if not t or t["device_id"] != payload.device_id:
-                raise HTTPException(409, "Seçilen ESP32 için gerçek telemetri bekleniyor.")
+                raise HTTPException(409, "Actual telemetry is expected for the selected ESP32.")
             if time.monotonic() - self._latest_received > NAV_SOURCE_TTL_S:
-                raise HTTPException(409, "Ölçüm güncel değil.")
+                raise HTTPException(409, "The measurement is out of date.")
             if not t["heading_calibrated"] or t["heading_deg"] is None:
-                raise HTTPException(409, "Önce pusulayı kalibre edin.")
+                raise HTTPException(409, "Calibrate the compass first.")
             if t["steps_total"] is None or t["stride_length_m"] is None:
-                raise HTTPException(409, "Adım sayacı ve kalibre adım uzunluğu gerekli.")
+                raise HTTPException(409, "Step counter and calibrated stride length required.")
             # Freeze the currently measured heading exactly when start is pressed.
             heading = t["heading_deg"]
             target = advance((0.0, 0.0), heading, TARGET_DISTANCE_M)
@@ -209,7 +209,7 @@ class AstroNavEngine:
         with self._lock:
             s = self._active()
             if s.goal_type != "target":
-                raise HTTPException(409, "Alternatif çizimler yalnızca hedef görevinde var.")
+                raise HTTPException(409, "Alternative drawings are only available in the target mission.")
             s.pending_route = payload.route_id
             return self.status()
 
@@ -217,7 +217,7 @@ class AstroNavEngine:
         with self._lock:
             s = self._active()
             if s.pending_route is None:
-                raise HTTPException(409, "Önce alternatif rota seçin.")
+                raise HTTPException(409, "Choose alternative route first.")
             if payload.approved:
                 s.active_route = s.pending_route
             s.pending_route = None
@@ -225,20 +225,20 @@ class AstroNavEngine:
 
     def _routes(self, s: NavSession) -> list[dict]:
         if s.goal_type == "base":
-            return [{"id":"A", "label":"Üs yönü / doğrudan (tahmini)",
+            return [{"id":"A", "label":"Base direction / direct (estimated)",
                      "distance_m":round(distance(s.pos,(0.0,0.0)),2),
                      "waypoints_m":[[0.0,0.0]]}]
         tx,ty = s.target
         # Conceptual alternatives are NOT obstacle-aware, mapped or validated trails.
         nx,ny = math.cos(math.radians(s.target_heading_deg)), -math.sin(math.radians(s.target_heading_deg))
         routes = [
-            ("A","Doğrudan çizgi",[[round(tx,3),round(ty,3)]]),
-            ("B","Geometrik sol sapma",[[round(tx*.5-nx*2.5,3),round(ty*.5-ny*2.5,3)],
+            ("A","direct line",[[round(tx,3),round(ty,3)]]),
+            ("B","Geometric left deviation",[[round(tx*.5-nx*2.5,3),round(ty*.5-ny*2.5,3)],
                                         [round(tx,3),round(ty,3)]]),
-            ("C","Geometrik sağ sapma",[[round(tx*.5+nx*2.5,3),round(ty*.5+ny*2.5,3)],
+            ("C","Geometric right deviation",[[round(tx*.5+nx*2.5,3),round(ty*.5+ny*2.5,3)],
                                         [round(tx,3),round(ty,3)]])
         ]
-        return [{"id":rid,"label":label+" (arazi doğrulaması yok)",
+        return [{"id":rid,"label":label+" (no terrain verification)",
                  "waypoints_m":nodes,
                  "distance_m":round(sum(distance(a,b) for a,b in zip(
                     [(0.0,0.0)]+[tuple(x) for x in nodes[:-1]],
@@ -249,9 +249,9 @@ class AstroNavEngine:
         with self._lock:
             s = self._session
             if s is None:
-                raise HTTPException(409, "Önce görevi başlatın.")
+                raise HTTPException(409, "Start the mission first.")
             if not payload.approved:
-                raise HTTPException(409, "Üsse dönüş için onay gerekli.")
+                raise HTTPException(409, "Confirmation required for return to base.")
             heading, warning = self._valid_heading(s)
             if heading is None:
                 raise HTTPException(409, warning)
@@ -264,7 +264,7 @@ class AstroNavEngine:
             return self.status()
 
     def demo_step(self, payload: NavStepIn) -> dict:
-        raise HTTPException(410, "Sanal ilerleme kaldırıldı. Sadece ESP32 adım telemetrisi kullanılır.")
+        raise HTTPException(410, "Virtual progression has been removed. Only ESP32 pitch telemetry is used.")
 
     def reset(self) -> dict:
         with self._lock:
@@ -273,7 +273,7 @@ class AstroNavEngine:
 
     def _active(self) -> NavSession:
         if self._session is None or self._session.status != "active":
-            raise HTTPException(409, "Aktif AstroNav oturumu yok.")
+            raise HTTPException(409, "No active AstroNav session.")
         return self._session
 
     def status(self) -> dict:
@@ -301,7 +301,7 @@ class AstroNavEngine:
                     "track_m": [], "distance_walked_m": 0,
                     "routes": [], "active_route_id": None, "pending_route_id": None,
                     "remaining_m": None, "turn_deg": None, "heading_deg": None,
-                    "next_waypoint": "BEKLENIYOR", "warnings": [],
+                    "next_waypoint": "EXPECTED", "warnings": [],
                     "terrain_source": "none", **sensor,
                 }
             heading, warning = self._valid_heading(s)
@@ -315,10 +315,10 @@ class AstroNavEngine:
             if warning:
                 warnings.append(warning)
             if not sensor_ready:
-                warnings.append("Canlı adım/pusula verisi eksik veya eski; hareket doğrulanamıyor.")
-            warnings.append("Hedef konumu ve varış ölçülen adım/pusuladan göreli tahmindir; GPS yok.")
+                warnings.append("Live step/compass data is missing or outdated; The move cannot be verified.")
+            warnings.append("Target location and arrival are relative estimation from measured step/compass; There is no GPS.")
             if not returning:
-                warnings.append("A/B/C alternatifleri yalnızca çizimdir; gerçek arazi ve engeller bilinmiyor.")
+                warnings.append("A/B/C alternatives are sketches only; actual terrain and obstacles unknown.")
             return {
                 "session_status": s.status,
                 "mode": "estimated" if sensor_ready and heading is not None else "unavailable",
@@ -338,7 +338,7 @@ class AstroNavEngine:
                 "heading_deg": round(heading,1) if heading is not None else None,
                 "target_bearing_deg": round(target_bearing,1) if target_bearing is not None else None,
                 "next_waypoint": "VARIS" if s.status == "completed"
-                                 else "US" if returning else "HEDEF",
+                                 else "US" if returning else "AIM",
                 "warnings": warnings, "terrain_source": "none", **sensor,
             }
 

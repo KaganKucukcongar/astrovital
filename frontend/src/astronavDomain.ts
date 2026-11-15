@@ -42,27 +42,27 @@ export type NavStatus={
 
 export function metres(v:number|null|undefined):string{
   return typeof v==='number'&&Number.isFinite(v)
-    ?v.toLocaleString('tr-TR',{minimumFractionDigits:1,maximumFractionDigits:1})+' m'
+    ?v.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+' m'
     :'—';
 }
 
 export function turnInstruction(v:number|null):string{
-  if(v===null||!Number.isFinite(v))return 'Yön doğrulanamadı';
+  if(v===null||!Number.isFinite(v))return "Direction could not be verified";
   const abs=Math.abs(v);
-  if(abs<=18)return 'Düz devam';
-  if(abs>=150)return 'Geri yönü kontrol et';
-  if(v>0)return abs<=75?'Hafif sağa dön':'Sağa dön';
-  return abs<=75?'Hafif sola dön':'Sola dön';
+  if(abs<=18)return "Continue straight";
+  if(abs>=150)return "Check reverse direction";
+  if(v>0)return abs<=75?"Turn slightly right":"Turn right";
+  return abs<=75?"Turn slightly left":"Turn left";
 }
 
 export function navStatusLabel(s:NavStatus|null):string{
-  if(!s)return 'Sunucu bekleniyor';
-  if(s.session_status==='idle')return 'Görev başlatılmadı';
+  if(!s)return "Waiting for server";
+  if(s.session_status==='idle')return "Mission not started";
   if(s.session_status==='completed')return s.goal_type==='base'
-    ?'Üs yakınlığı tahmin edildi; doğrulanmadı'
-    :'10 m hedefe tahmini varış; doğrulanmadı';
-  if(s.mode==='unavailable')return 'Canlı sensör verisi bekleniyor';
-  return s.goal_type==='base'?'Üs yönü gösteriliyor (tahmini)':'10 m hedefi canlı telemetriyle takip ediliyor';
+    ?"Base proximity was estimated; not verified"
+    :"Estimated arrival at target 10 m; not verified";
+  if(s.mode==='unavailable')return "Live sensor data expected";
+  return s.goal_type==='base'?"Showing base direction (estimated)":"10 m target tracked with live telemetry";
 }
 
 export type Point=[number,number];

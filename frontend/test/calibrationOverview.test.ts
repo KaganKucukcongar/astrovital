@@ -3,43 +3,43 @@ import assert from 'node:assert/strict';
 import {selectOverviewMissionAnalysis} from '../src/calibrationOverview.ts';
 
 const common={mode:'api' as const,apiOnline:true,sensorStreamActive:true,measurementUsable:true};
-const anomaly={type:'spo2_down',recommendation:'Astronot: Görev kontrolüne bildir ve sensörü doğrula.',confirmation:'3 ardışık kaliteli ölçümde görüldü',verified:false};
-const monitoring={active:false,monitoring_enabled:true,phase:'finished',analysis_status:'normal',mission_recommendation:'Görev prosedürü çerçevesinde izlemeyi sürdür.',current_anomaly:null};
+const anomaly={type:'spo2_down',recommendation:"Astronaut: Notify mission control and verify sensor.",confirmation:"Seen in 3 consecutive quality measurements",verified:false};
+const monitoring={active:false,monitoring_enabled:true,phase:'finished',analysis_status:'normal',mission_recommendation:"Maintain monitoring within mission procedure.",current_anomaly:null};
 
-test('anomali yokken kişisel analiz ve görev önerisi her zaman görünür',()=>{
+test("Personal analysis and mission recommendation always visible when there are no anomalies",()=>{
  const s=selectOverviewMissionAnalysis(monitoring,common);
- assert.equal(s.state,'normal');assert.match(s.recommendation,/Görev/);
+ assert.equal(s.state,'normal');assert.match(s.recommendation,/mission/i);
 });
-test('CSV kapalı olsa bile aktif SpO₂ anomali adayı gösterilir',()=>{
+test("Active SpO₂ anomaly candidate is shown even if CSV is turned off",()=>{
  const s=selectOverviewMissionAnalysis({...monitoring,analysis_status:'anomaly',current_anomaly:anomaly},common);
- assert.equal(s.state,'anomaly');assert.equal(s.category,'Tahmini SpO₂ düşüşü');
- assert.match(s.recommendation,/Görev kontrolüne/);
+ assert.equal(s.state,'anomaly');assert.equal(s.category,"Estimated SpO₂ drop");
+ assert.match(s.recommendation,/mission control/i);
 });
-test('nabız yüksek ve düşük sapma ayrı adlarla verilir',()=>{
- for(const [kind,label] of [['heart_rate_up','Nabızda artış sapması'],['heart_rate_down','Nabızda düşüş sapması']] as const) {
+test("Pulse high and low deviation are given separate names",()=>{
+ for(const [kind,label] of [['heart_rate_up',"Increased heart rate deviation"],['heart_rate_down',"Decrease in heart rate"]] as const) {
   const s=selectOverviewMissionAnalysis({...monitoring,analysis_status:'anomaly',current_anomaly:{...anomaly,type:kind}},common);
   assert.equal(s.category,label);
  }
 });
-test('geçersiz sensör verisini normal ya da anomali sayma',()=>{
+test("consider invalid sensor data as normal or anomaly",()=>{
  const s=selectOverviewMissionAnalysis({...monitoring,analysis_status:'anomaly',current_anomaly:anomaly},
  {...common,measurementUsable:false});
  assert.equal(s.state,'quality_issue');
 });
-test('referans yoksa normal deme ama görev önerisi göster',()=>{
+test("If there is no reference, don't say it's normal, but show a task suggestion.",()=>{
  const s=selectOverviewMissionAnalysis(null,common);
  assert.equal(s.state,'inactive');assert.ok(s.recommendation.length>30);
 });
-test('ESP32 veri akışı durursa eski anomali aktif diye sunulmaz',()=>{
+test("If the ESP32 data flow stops, the old anomaly is not presented as active",()=>{
  const s=selectOverviewMissionAnalysis({...monitoring,analysis_status:'anomaly',current_anomaly:anomaly},
  {...common,sensorStreamActive:false});
  assert.equal(s.state,'offline');
 });
-test('simülasyon ve API hataları kişisel canlı analiz değildir',()=>{
+test("simulation and API errors are not personal live analysis",()=>{
  assert.equal(selectOverviewMissionAnalysis(monitoring,{...common,mode:'sim'}).state,'demo');
  assert.equal(selectOverviewMissionAnalysis(monitoring,{...common,apiOnline:false}).state,'offline');
 });
-test('kalibrasyon sürerken durum açıkça eksik görünür',()=>{
+test("status appears clearly incomplete while calibration is in progress",()=>{
  const s=selectOverviewMissionAnalysis({...monitoring,analysis_status:'calibrating'},common);
  assert.equal(s.state,'calibrating');
 });

@@ -1,12 +1,12 @@
-// Sadece arayüz prototipi: gerçek ses, mikrofon, ağ bağlantısı veya çağrı kaydı yoktur.
+// Interface prototype only: no real audio, microphone, network connection or call recording.
 export type VoiceCallTarget = 'mission' | 'eva' | 'earth';
 export type VoiceCallDirection = 'outgoing' | 'incoming';
 export type VoiceCallPhase = 'dialing' | 'ringing' | 'connected' | 'ended';
 
 export const VOICE_TARGETS: Record<VoiceCallTarget,{label:string;role:string;code:string}> = {
-  mission:{label:'Yerel Görev Merkezi',role:'Mars istasyonu · yerel operatör',code:'MCC-LOCAL'},
-  eva:{label:'EVA Mürettebatı',role:'Dış görev ekibi · telsiz prototipi',code:'EVA-TEAM'},
-  earth:{label:'Dünya Görev Kontrol',role:'Uzaktan bağlantı · simülasyon',code:'MCC-EARTH'},
+  mission:{label:"Local Mission Center",role:"Mars station · local operator",code:'MCC-LOCAL'},
+  eva:{label:"EVA Crew",role:"Away team radio prototype",code:'EVA-TEAM'},
+  earth:{label:"World Mission Control",role:"Remote connection simulation",code:'MCC-EARTH'},
 };
 
 export function formatDemoCallDuration(totalSeconds:number):string {
@@ -15,8 +15,8 @@ export function formatDemoCallDuration(totalSeconds:number):string {
 }
 
 export function demoCallPhaseLabel(phase:VoiceCallPhase,direction:VoiceCallDirection):string {
-  if(phase==='dialing')return 'Bağlantı kuruluyor · DEMO';
-  if(phase==='ringing')return direction==='incoming'?'Gelen demo çağrı':'Çağrı bekleniyor · DEMO';
-  if(phase==='connected')return 'Görüşme simülasyonu aktif';
-  return 'Demo çağrı sonlandırıldı';
+  if(phase==='dialing')return "Establishing connection · DEMO";
+  if(phase==='ringing')return direction==='incoming'?"Incoming demo call":"Call waiting · DEMO";
+  if(phase==='connected')return "Call simulation active";
+  return "Demo call terminated";
 }

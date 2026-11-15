@@ -34,26 +34,26 @@ CSV_FIELDS = [
 
 RECOMMENDATIONS = {
     "heart_rate_up": (
-        "Nabız kişisel başlangıç düzeyinden yükseldi. Kişinin durumunu sorun, "
-        "hareketi ve sensör temasını kontrol ederek sakin koşulda ölçümü tekrarlayın. "
-        "Değişim sürerse yetkili bir yetişkin veya sağlık uzmanına danışın."
+        "Heart rate increased from personal baseline. Ask about the person's situation, "
+        "Repeat measurement in quiet condition, checking movement and sensor contact. "
+        "If changes persist, consult a competent adult or healthcare professional."
     ),
     "heart_rate_down": (
-        "Nabız kişisel başlangıç düzeyinden düştü. Sensör yerleşimini doğrulayın, "
-        "ölçümü yeniden alın ve kişiye nasıl hissettiğini sorun. "
-        "Değişim sürerse sağlık uzmanına danışın."
+        "Heart rate has dropped from personal baseline. Verify sensor placement, "
+        "Take the measurement again and ask the person how they feel. "
+        "If changes persist, consult your healthcare professional."
     ),
     "spo2_down": (
-        "Tahmini SpO2 kişisel başlangıç ölçümüne göre düştü. Optik sensörün "
-        "temasını ve sinyal kalitesini kontrol ederek tekrar ölçün. "
-        "Kişi kendisini kötü hissediyorsa veya düşük ölçüm sürüyorsa "
-        "gecikmeden bir yetişkinin ve sağlık uzmanının değerlendirmesini isteyin."
+        "Estimated SpO2 decreased from personal baseline measurement. optical sensor "
+        "Measure again by checking contact and signal quality. "
+        "If the person feels unwell or continues to have low readings "
+        "Seek evaluation by an adult and healthcare professional without delay."
     ),
 }
 
 QUALITY_NOTE = (
-    "Sinyal veya hareket nedeniyle ölçüm güvenilir değil. "
-    "Sensör temasını kontrol edin ve kişi sakin dururken yeniden deneyin."
+    "The measurement is unreliable due to signal or movement. "
+    "Check sensor contact and try again while the person is calm."
 )
 
 
@@ -91,9 +91,9 @@ class CalibrationRecorder:
 
     def start(self, *, consent: bool) -> dict[str, Any]:
         if not consent:
-            raise ValueError("Katılımcının bilgilendirilmiş onayı gereklidir.")
+            raise ValueError("Informed consent of the participant is required.")
         if self.active:
-            raise ValueError("Bir kalibrasyon oturumu zaten aktif.")
+            raise ValueError("A calibration session is already active.")
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
             os.chmod(self.directory, 0o700)
@@ -127,7 +127,7 @@ class CalibrationRecorder:
 
     def stop(self) -> dict[str, Any]:
         if not self.active:
-            raise ValueError("Aktif bir kalibrasyon oturumu yok.")
+            raise ValueError("There is no active calibration session.")
         self.active = False
         self.stopped_at = datetime.now(timezone.utc).isoformat()
         return self.status()
@@ -166,9 +166,9 @@ class CalibrationRecorder:
             "last_anomaly": self.last_anomaly,
             "quality_warning": self.last_quality_warning,
             "explanation": (
-                "Bu sistem kişisel başlangıç düzeyinden istatistiksel sapma adaylarını bulur. "
-                "Tıbbi tanı, eğitimli yapay zeka modeli veya klinik alarm değildir. "
-                "CSV'deki verified_label alanı insan incelemesi için boş bırakılır."
+                "This system finds candidates for statistical deviation from the personal baseline. "
+                "It is not a medical diagnosis, a trained AI model, or a clinical alert. "
+                "The verified_label field in the CSV is left blank for human review."
             ),
         }
 
@@ -226,7 +226,7 @@ class CalibrationRecorder:
                         "type": category,
                         "detected_at": arrived.isoformat(),
                         "recommendation": RECOMMENDATIONS[category],
-                        "confirmation": "3 ardışık kaliteli ölçümde görüldü",
+                        "confirmation": "Seen in 3 consecutive quality measurements",
                         "verified": False,
                     }
                     self.last_anomaly = dict(self.current_anomaly)

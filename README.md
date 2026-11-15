@@ -2,7 +2,7 @@
 
 AstroVital X is a research prototype for astronaut telemetry monitoring and explainable, rule-based mission decision support. It combines a FastAPI backend with a React/TypeScript dashboard, a hardware-independent simulator, and a Raspberry Pi deployment.
 
-This repository captures the **M03-tested implementation deployed to a Raspberry Pi on November 14, 2026**. The operator interface remains in Turkish.
+This repository contains the M03 baseline and the November 15, 2026 AstroNav, live radio, hotspot CSV operator-control, and English-language interface updates. The operator interface and user-facing guidance are in English.
 
 ## Features
 
@@ -12,6 +12,9 @@ This repository captures the **M03-tested implementation deployed to a Raspberry
 - Astronaut Self-Check, synthetic route comparison, and a persisted Mission Black Box event log.
 - Browser dashboard and independent simulator modes (including low signal, high motion, stale/future packets, missing readings and link loss).
 - Raspberry Pi Wi-Fi hotspot / Ethernet operation without requiring internet access at runtime.
+- AstroNav: a 10 m heading-locked relative target, pedometer-based position estimation, return-to-base guidance, and magnetic-north / device-up map views; no GPS or obstacle avoidance.
+- Live 8 kHz PCM voice radio bridge with explicit microphone permission.
+- Opt-in personal-baseline CSV calibration; hotspot write access requires a separately stored operator key, and participant consent is always required.
 
 **Scope:** This is not a clinical diagnostic or medical device, does not use AI models, and does not autonomously navigate a real Mars route. Synthetic demo routes are not safety-certified. Measured hardware telemetry requires separate physical validation.
 
@@ -77,7 +80,7 @@ The source was deployed and checked over Raspberry Pi Ethernet. Backend and fron
 
 The browser dashboard has been updated to follow the AstroVital X Figma design reference (overview layout, dark mission-control styling, four telemetry metrics, trend chart, HADSE and self-check sections). Existing backend integration, self-check submission, event history, sensor quality rules and the simulator remain available.
 
-The dashboard uses the browser hostname to locate the API on port `8000`, making the same build usable over a Raspberry Pi hotspot (`192.168.4.1`) or Ethernet (`192.168.10.1`). It explicitly labels unimplemented navigation, Earth link and environmental measurements as **DEMO**. No unsupported clinical or hardware capabilities are claimed.
+The dashboard uses the browser hostname to locate the API on port `8000`, making the same build usable over a Raspberry Pi hotspot (`192.168.4.1`) or Ethernet (`192.168.10.1`). At the time of that historical release, navigation and Earth-link mockups were labeled **DEMO**; later AstroNav updates added live heading-and-step relative navigation without GPS. No unsupported clinical or hardware capabilities are claimed.
 
 The API connectivity indicator is now resilient to transient polling failures. Requests are not overlapped, optional event history is fetched every six seconds, a failed optional endpoint cannot declare the API offline, and three consecutive fully failed polls are required before marking a previously connected API offline. Mission refresh delays retain last-known data and are indicated separately.
 
@@ -93,6 +96,17 @@ The HADSE page adds an **opt-in CSV calibration session**. A consenting particip
 
 Read [the calibration guide](docs/HADSE_CALIBRATION.md) for consent, operating instructions, limitations and the optional local CSV transfer helper. The backend calibration module was exercised with isolated unit tests; the frontend has 21 passing tests and its production build was verified. The active calibration session remains off until explicitly started.
 
-## Canlı telsiz ve mikrofon izin paneli
+## Live radio and microphone permission panel
 
-ESP32 ve Raspberry Pi arasında iki yönlü 8 kHz PCM WebSocket ses köprüsü, dashboard'da VU metre ve bas-konuş (PTT), ayrıca açık kullanıcı mikrofon izin kontrolü eklendi. Ayrıntılar, kısıtlar ve güvenli yerel Chrome kısayolu kurulumu için [Canlı Telsiz Rehberi](docs/LIVE_AUDIO.md) dosyasına bakın. Fiziksel ses donanımının kalitesi henüz doğrulanmadı.
+Added two-way 8 kHz PCM WebSocket audio bridge between ESP32 and Raspberry Pi, VU meter and push-to-talk (PTT) in the dashboard, as well as explicit user microphone permission control. See [Live Radio Guide](docs/LIVE_AUDIO.md) for details, restrictions and secure local Chrome shortcut installation. The quality of the physical audio hardware has not yet been verified.
+
+
+## November 15, 2026: English interface and operator controls
+
+The React dashboard, AstroNav map, voice communication panel, simulation labels, status messages, HTML metadata, README, and technical guides use English. The frontend retains the same API field names and endpoint paths, so the wire protocol does not change when the UI language changes.
+
+The live AstroNav prototype uses a calibrated magnetic heading and estimated step length. Its 10 m target and return-to-base directions are **relative estimates, not GPS coordinates or verified safe routes**. Three route drawings are schematic only. Magnetic north is not corrected to geographic true north.
+
+CSV calibration start/stop controls still require informed participant consent. Ethernet operator access remains supported. For AstroHotspot operation, the backend checks a private server-side operator token; the token must never be stored in source control or included in frontend assets. During a running mission, a temporary port 8001 bridge can forward these operations to the existing backend without restarting the in-memory AstroNav session. The bridge is deployment-specific and is not a general-purpose authenticated API.
+
+After the changes are safely deployed, run the frontend domain tests (npm test and npm run build) and backend tests (python -m pytest). These tests do not replace physical ESP32, microphone, or Wi-Fi validation.

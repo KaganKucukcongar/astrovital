@@ -31,12 +31,12 @@ try:
         try:
             files=sftp.listdir_attr(REMOTE)
         except FileNotFoundError:
-            print("Henüz CSV kaydı yok: oturum başlatılmamış.")
+            print("No CSV record yet: session not started.")
             raise SystemExit(0)
         allowed=[f for f in files if re.fullmatch(
             r"session_\d{8}T\d{6}Z_[0-9a-f]{16}\.csv",f.filename)]
         if not allowed:
-            print("Henüz kaydedilmiş kalibrasyon CSV'si yok.")
+            print("There are no calibration CSVs saved yet.")
             raise SystemExit(0)
         LOCAL.mkdir(parents=True,exist_ok=True)
         for file in sorted(allowed,key=lambda x:x.filename):
@@ -48,9 +48,9 @@ try:
             sftp.get(REMOTE+"/"+file.filename,str(tmp))
             if tmp.stat().st_size!=file.st_size:
                 tmp.unlink(missing_ok=True)
-                raise RuntimeError("Eksik dosya kopyası: "+file.filename)
+                raise RuntimeError("Missing file copy: "+file.filename)
             os.replace(tmp,final)
             print("INDIRILDI:",str(final),file.st_size,"bayt")
 finally:
     ssh.close()
-print("CSV aktarma tamamlandi. Olcum verilerini izinsiz paylasmayin.")
+print("CSV import is complete. Do not share measurement data without permission.")

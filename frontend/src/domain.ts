@@ -42,22 +42,22 @@ export type LogEvent = {
 };
 
 export const SCENARIOS: { id: Scenario; label: string; description: string }[] = [
-  { id: 'nominal', label: 'Normal görev', description: 'Kararlı sentetik telemetri' },
-  { id: 'moderate_exertion', label: 'Fiziksel efor', description: 'Hareket ve nabızda değişim' },
-  { id: 'high_motion', label: 'Yoğun hareket', description: 'Hareket nedeniyle değerlendirme yapılmaz' },
-  { id: 'poor_signal', label: 'Düşük sinyal', description: 'Güvenilmez sensör verisi' },
-  { id: 'stale_data', label: 'Gecikmiş paket', description: 'Güncelliğini kaybetmiş veri' },
-  { id: 'future_data', label: 'Gelecek zamanlı paket', description: 'Cihaz saati uyumsuz: öneri üretilmez' },
-  { id: 'missing_reading', label: 'Eksik sensör okumaları', description: 'Nabız ve SpO₂ yok: öneri üretilmez' },
-  { id: 'link_loss', label: 'Bağlantı kaybı', description: 'Yeni telemetri paketi gelmez' },
+  { id: 'nominal', label: "normal duty", description: "Stable synthetic telemetry" },
+  { id: 'moderate_exertion', label: 'Fiziksel efor', description: "Change in movement and pulse" },
+  { id: 'high_motion', label: "intense movement", description: "No evaluation due to movement" },
+  { id: 'poor_signal', label: "low signal", description: "Unreliable sensor data" },
+  { id: 'stale_data', label: "delayed package", description: "outdated data" },
+  { id: 'future_data', label: "Future tense package", description: "Device time is incompatible: suggestion is not generated" },
+  { id: 'missing_reading', label: "Missing sensor readings", description: "No pulse and SpO₂: no recommendation generated" },
+  { id: 'link_loss', label: "connection loss", description: 'Yeni telemetri paketi gelmez' },
 ];
 
 export const CONFIDENCE_REASONS: Record<string,string> = {
-  stale_packet: 'Ölçüm güncel değil (5 saniyeyi aştı)',
-  future_timestamp: 'Ölçüm zamanı gelecekte (saat senkronizasyonunu kontrol edin)',
-  low_signal_quality: 'Sinyal kalitesi yetersiz',
-  excessive_motion: 'Hareket kaynaklı belirsizlik yüksek',
-  missing_sensor_reading: 'Geçerli sensör okuması yok',
+  stale_packet: "Measurement is out of date (exceeded 5 seconds)",
+  future_timestamp: "Measurement time in the future (check clock synchronization)",
+  low_signal_quality: "Signal quality is poor",
+  excessive_motion: "Uncertainty due to movement is high",
+  missing_sensor_reading: "No valid sensor reading",
 };
 export const describeConfidenceReason = (reason: string): string => CONFIDENCE_REASONS[reason] || reason;
 
@@ -81,22 +81,22 @@ export function createDemoSample(scenario: Scenario, sequence: number, now = Dat
 
 export function assessSample(sample: Sample | null, selfCheck: CheckStatus | null, now = Date.now()): Assessment {
   if (!sample) return { status: 'abstain', score: null, confidence: 0, usable: false,
-    reasons: ['Henüz telemetri alınmadı'], explanation: 'Değerlendirme için ölçüm bekleniyor.' };
+    reasons: ["No telemetry received yet"], explanation: "Measurements are awaited for evaluation." };
 
-  // Backend ile aynı demo kalite kapısı. Bu değer tıbbi risk skoru değildir.
+  // Same demo quality gate as backend. This value is not a medical risk score.
   const reasons: string[] = [];
   const age = now - new Date(sample.observedAt).getTime();
   const invalidQuality = !Number.isFinite(sample.quality) || sample.quality < 0 || sample.quality > 1;
   const invalidMotion = !Number.isFinite(sample.acceleration) || sample.acceleration < 0 || sample.acceleration > 16;
-  if (!Number.isFinite(age)) reasons.push('Zaman damgası geçersiz');
+  if (!Number.isFinite(age)) reasons.push("Timestamp is invalid");
   else {
-    if (age > 5000) reasons.push('Ölçüm güncel değil');
-    if (age < -2000) reasons.push('Ölçüm zamanı gelecekte görünüyor');
+    if (age > 5000) reasons.push("Measurement is out of date");
+    if (age < -2000) reasons.push("Measurement time appears in the future");
   }
-  if (invalidQuality || sample.quality < 0.6) reasons.push('Sinyal kalitesi yetersiz');
-  if (invalidMotion || sample.acceleration > 2) reasons.push('Hareket ölçümü güvenilirliği etkiliyor');
+  if (invalidQuality || sample.quality < 0.6) reasons.push("Signal quality is poor");
+  if (invalidMotion || sample.acceleration > 2) reasons.push("Motion measurement affects reliability");
   if ((sample.heartRate === null || sample.heartRate <= 0) &&
-      (sample.spo2 === null || sample.spo2 <= 0)) reasons.push('Geçerli fizyolojik ölçüm yok');
+      (sample.spo2 === null || sample.spo2 <= 0)) reasons.push("No valid physiological measurements");
 
   const quality = invalidQuality ? 0 : sample.quality;
   const movementFactor = invalidMotion || sample.acceleration > 2 ? 0.5 : 1;
@@ -104,13 +104,13 @@ export function assessSample(sample: Sample | null, selfCheck: CheckStatus | nul
   const hasReading = (sample.heartRate !== null && sample.heartRate > 0) || (sample.spo2 !== null && sample.spo2 > 0);
   const confidence = Math.round(quality * movementFactor * freshnessFactor * (hasReading ? 1 : 0) * 1000) / 1000;
   if (reasons.length) return { status: 'abstain', score: null, confidence, usable: false, reasons,
-    explanation: 'Öneri üretilmedi. Verinin kalitesini, zamanını ve sensör bağlantısını kontrol edin.' };
+    explanation: "No recommendations were produced. Check the quality of data, timeliness and sensor connection." };
   if (selfCheck === 'needs_help' || selfCheck === 'fatigued' || sample.acceleration > 1.3) {
     return { status: 'review', score: Math.round(confidence * 100), confidence, usable: true, reasons: [],
-      explanation: 'Hareket veya öz bildirim değişimi gözlemlendi. Operatör değerlendirmesi gerekli.' };
+      explanation: "Movement or self-report change observed. Operator evaluation required." };
   }
   return { status: 'continue', score: Math.round(confidence * 100), confidence, usable: true, reasons: [],
-    explanation: 'Veri kalite kontrollerini geçti. İzleme sürdürülüyor; bu tıbbi uygunluk kararı değildir.' };
+    explanation: "Passed data quality checks. Monitoring continues; This is not a medical fitness decision." };
 }
 
 export function mapApiTelemetry(t: Record<string, unknown>): Sample {
@@ -133,7 +133,7 @@ export function mapApiTelemetry(t: Record<string, unknown>): Sample {
     observedAt: String(t.observed_at ?? ''),
     source: t.source === 'measured' ? 'measured' : 'simulated',
     heartRate: num(t.heart_rate_bpm) !== null && num(t.heart_rate_bpm)! > 0 ? num(t.heart_rate_bpm) : null,
-    // Sıfır SpO₂ bir ölçüm değildir: cihaz henüz parmak algılamıyor olabilir.
+    // Zero SpO₂ is not a measurement: the device may not yet detect a finger.
     spo2: num(t.spo2_pct) !== null && num(t.spo2_pct)! > 0 && num(t.spo2_pct)! <= 100 ? num(t.spo2_pct) : null,
     acceleration: num(t.acceleration_g) ?? 0, quality: num(t.signal_quality) ?? 0,
     temperatureC: bmpAvailable ? num(t.temperature_c) : null,
@@ -149,13 +149,13 @@ export function mapApiTelemetry(t: Record<string, unknown>): Sample {
 
 export function compassDirection(degrees: number | null): string {
   if (degrees === null || !Number.isFinite(degrees)) return '—';
-  const labels = ['K', 'KD', 'D', 'GD', 'G', 'GB', 'B', 'KB'];
+  const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   return labels[Math.round((((degrees % 360) + 360) % 360) / 45) % 8];
 }
 
-// Canlı iletişim ile olçümün gözlem zamanı farklı şeylerdir. ESP32 RTC'si
-// sunucu saatinden birkaç saniye geride olabilir. Akış, yeni paketlerin
-// sunucu/tarayıcıya ulaşma zamanına göre izlenir; HADSE zaman kontrolü aynı kalır.
+// Live communication and measurement observation time are different things. ESP32 RTC
+// It may be a few seconds behind the server time. Streaming, new packages
+// tracked by time of arrival at the server/browser; HADSE time control remains the same.
 export function isSensorStreamActive(sample: Sample | null, lastReceivedAt: number | null, now = Date.now()): boolean {
   if (!sample || sample.source !== 'measured' || lastReceivedAt === null) return false;
   const elapsed = now - lastReceivedAt;
@@ -170,7 +170,7 @@ export function isLiveMeasured(sample: Sample | null, now = Date.now()): boolean
 
 export function clockTime(dateIso: string): string {
   const date = new Date(dateIso);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('tr-TR', { hour12: false, timeZone: 'UTC' }) + ' UTC';
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('en-US', { hour12: false, timeZone: 'UTC' }) + ' UTC';
 }
 
 export function ageSeconds(dateIso: string, now = Date.now()) {

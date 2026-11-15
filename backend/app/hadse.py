@@ -6,11 +6,11 @@ from typing import Any, Literal
 from app.confidence import Confidence
 
 REASON_TEXT = {
-    "stale_packet": "ölçüm 5 saniyeden eski",
-    "future_timestamp": "ölçüm zaman damgası gelecekte",
-    "low_signal_quality": "sinyal kalitesi düşük",
-    "excessive_motion": "hareket nedeniyle veri güvenilmez",
-    "missing_sensor_reading": "geçerli sensör okuması yok",
+    "stale_packet": "measurement is older than 5 seconds",
+    "future_timestamp": "measurement timestamp in the future",
+    "low_signal_quality": "signal quality is low",
+    "excessive_motion": "data unreliable due to movement",
+    "missing_sensor_reading": "no valid sensor reading",
 }
 
 
@@ -38,7 +38,7 @@ def evaluate(
         return Decision(
             status="abstain",
             score=None,
-            reason="Öneri üretilmedi: " + ", ".join(REASON_TEXT.get(r, r) for r in confidence.reasons) + ".",
+            reason="Recommendation not produced: " + ", ".join(REASON_TEXT.get(r, r) for r in confidence.reasons) + ".",
             source=source,
         )
 
@@ -54,9 +54,9 @@ def evaluate(
         status="review" if needs_review else "continue",
         score=weighted,
         reason=(
-            "Demo hareket, sinyal veya öz bildirim kuralı tetiklendi; operatör incelemesi gerekli."
+            "Demo move, signal or self-reporting rule has been triggered; operator review required."
             if needs_review
-            else "Veri kalite kontrollerini geçti; operasyonel izleme sürdürülebilir. İnsan gözetimi gereklidir."
+            else "Passed data quality checks; operational monitoring can be maintained. Human oversight is required."
         ),
         source=source,
     )

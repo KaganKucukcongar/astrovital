@@ -311,7 +311,7 @@ a { color:inherit; }
   .banner-meta { flex-wrap:wrap; }
 }
 
-/* Canlı cihazın simülasyondan ayrıldığı durum şeridi */
+/* Status strip where the live device leaves the simulation */
 .device-live-banner { display:flex; flex-wrap:wrap; gap:11px; align-items:center; margin:-8px 0 20px;
   padding:12px 16px; background:#102e2b; color:#91e8c9; border:1px solid #306b5c; border-radius:10px;
   font-size:11px; }
@@ -478,7 +478,7 @@ a { color:inherit; }
 @media (max-width:620px){.calibration-stats .stat-line strong{max-width:60%;}}
 
 
-/* HADSE Genel Bakış: sadece aktif, onaylı oturumdan gelen sapma adayları. */
+/* HADSE Overview: deviation candidates from active, approved session only. */
 .figma-hadse-anomaly {border:1px solid #81552c;background:#30271f;border-radius:7px;padding:12px 13px;display:flex;flex-direction:column;gap:7px;}
 .figma-hadse-anomaly-title {display:flex;align-items:center;gap:7px;color:#ffd08d;font:10px var(--mono);letter-spacing:.45px;}
 .figma-hadse-anomaly-title svg {flex:0 0 auto;}
@@ -849,3 +849,9 @@ a { color:inherit; }
 .astronav-heading-sync span{font-size:12px;color:#c6e3ef}
 .astronav-heading-sync small{font-size:11px;color:#9ab8ca;line-height:1.35}
 @media(max-width:520px){.astronav-heading-sync{align-items:flex-start}.astronav-orientation-toggle button{padding:5px 7px}}
+
+/* Hotspot operator key; It is isolated from other calibration panels. */
+.calibration-operator{display:flex;flex-direction:column;gap:7px;margin:12px 0;padding:12px;border:1px solid var(--line,rgba(255,255,255,.18));border-radius:12px}
+.calibration-operator label{font-weight:650}
+.calibration-operator input{width:100%;min-width:0;box-sizing:border-box;padding:11px 12px;border:1px solid #64748b;border-radius:9px;background:rgba(0,0,0,.14);color:inherit;font:inherit}
+.calibration-operator small{opacity:.8}

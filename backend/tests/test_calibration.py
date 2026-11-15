@@ -78,7 +78,7 @@ class CalibrationTests(unittest.TestCase):
             self.assertEqual(alarm["current_anomaly"]["type"], "heart_rate_up")
             self.assertEqual(alarm["anomaly_count"], 1)
             self.assertFalse(alarm["current_anomaly"]["verified"])
-            self.assertIn("tekrarlayın", alarm["current_anomaly"]["recommendation"])
+            self.assertIn("repeat", alarm["current_anomaly"]["recommendation"])
 
             # Low quality cannot count as another physiological anomaly.
             post(sample(27,hr=98,quality=0.1))

@@ -1,4 +1,4 @@
-// AstroVital X canlı telsiz PCM biçimi: 8000 Hz, unsigned 8-bit mono, 256 byte.
+// AstroVital X live radio PCM format: 8000 Hz, unsigned 8-bit mono, 256 bytes.
 export const PCM_RATE = 8000;
 export const PCM_BLOCK = 256;
 export const PCM_SILENCE = 128;
@@ -20,7 +20,7 @@ export function pcmVuPercent(packet:Uint8Array):number {
     sum+=normalized*normalized;
   }
   const rms=Math.sqrt(sum/packet.length);
-  // A0 cızırtısını da göstermek için duyarlı bir ölçüm ölçeği.
+  // A sensitive measuring scale to also show A0 chatter.
   return Math.max(0,Math.min(100,Math.round(rms*250)));
 }
 
@@ -36,7 +36,7 @@ export class Pcm8kPacketizer {
   private readonly step:number;
   constructor(inputSampleRate:number) {
     if(!Number.isFinite(inputSampleRate)||inputSampleRate<PCM_RATE)
-      throw new Error('Mikrofonun örnekleme hızı en az 8 kHz olmalı.');
+      throw new Error("The sampling rate of the microphone must be at least 8 kHz.");
     this.step=inputSampleRate/PCM_RATE;
   }
   feed(samples:Float32Array):Uint8Array[] {

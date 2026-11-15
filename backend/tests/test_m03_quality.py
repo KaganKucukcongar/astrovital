@@ -1,4 +1,4 @@
-"""M03: veri kalite kapısı + karar vermekten kaçınma regresyonu."""
+"M03: data quality gate + decision avoidance regression."
 
 from datetime import datetime, timedelta, timezone
 
@@ -40,7 +40,7 @@ def test_scenarios_with_api(tmp_path, scenario, expected):
         assert result["decision"]["score"] is None
         assert not result["confidence"]["usable"]
         assert result["route_plan"]["selected_route_id"] is None
-        assert result["decision"]["reason"].startswith("Öneri üretilmedi")
+        assert result["decision"]["reason"].startswith("Recommendation not produced")
 
 
 def test_zeros_are_not_real_sensor_readings(tmp_path):
@@ -95,4 +95,4 @@ def test_simulated_link_loss_never_reuses_previous_recommendation(tmp_path):
     assert current["assessment"]["decision"]["status"] == "abstain"
     assert current["assessment"]["confidence"]["usable"] is False
     assert current["assessment"]["route_plan"]["selected_route_id"] is None
-    assert current["assessment"]["telemetry"]["sequence"] == 1  # Eski kayıt silinmez.
+    assert current["assessment"]["telemetry"]["sequence"] == 1  # The previous record must be preserved.

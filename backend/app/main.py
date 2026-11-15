@@ -2,6 +2,7 @@
 
 import os
 import ipaddress
+import secrets
 import logging
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -28,25 +29,40 @@ def create_app(db_path: Path | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://192.168.4.1:5173", "http://192.168.10.1:5173"],
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "X-AstroVital-Operator-Key"],
     )
 
     blackbox = BlackBox(db_path or Path(os.getenv("ASTROVITAL_DB_PATH", "data/mission_blackbox.sqlite3")))
     lock = Lock()
     calibration = CalibrationRecorder(blackbox.path.parent / "calibration_sessions")
     audio_bridge = AudioBridge()  # Async and independent of the telemetry Lock.
-    astronav = AstroNavEngine()  # Real ESP32 dead reckoning only; no GPS or terrain.
+    astronav = AstroNavEngine()  # 2D dead reckoning / explicit simulation, no GPS.
 
-    def require_operator_ethernet(request: Request) -> None:
-        # Measurement capture is explicitly opt-in and never remotely
-        # controllable by ordinary AstroHotspot clients (192.168.4.0/24).
+    def require_calibration_operator(request: Request) -> None:
+        # Ethernet operatoru eskisi gibi calisir; hotspot istemcileri ise
+        # sunucuda saklanan 128-bit operator anahtarini gostermelidir.
+        # Participant consent is a separate obligation.
         host = request.client.host if request.client else ""
         try:
             address = ipaddress.ip_address(host)
         except ValueError:
-            raise HTTPException(status_code=403, detail="Yerel operatör bağlantısı gerekli")
-        if not (address.is_loopback or address in ipaddress.ip_network("192.168.10.0/24")):
-            raise HTTPException(status_code=403, detail="Kalibrasyon yalnızca Ethernet operatör bağlantısından yönetilir")
+            raise HTTPException(status_code=403, detail="Yerel operator baglantisi gerekli")
+        if address.is_loopback or address in ipaddress.ip_network("192.168.10.0/24"):
+            return
+        if address not in ipaddress.ip_network("192.168.4.0/24"):
+            raise HTTPException(status_code=403, detail="Calibration is managed only from the local task network")
+        # The secret key is not embedded in the interface or source code. The file must have permission 0600.
+        token_file = Path(os.getenv(
+            "ASTROVITAL_CALIBRATION_OPERATOR_KEY_FILE",
+            "/home/mustafa/astrovital/.operator-calibration-key"
+        ))
+        try:
+            expected = token_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            raise HTTPException(status_code=503, detail="Hotspot operator anahtari sunucuda kurulu degil")
+        supplied = request.headers.get("x-astrovital-operator-key", "")
+        if len(expected) < 32 or not secrets.compare_digest(supplied, expected):
+            raise HTTPException(status_code=403, detail="AstroHotspot operator anahtari eksik veya hatali")
 
     state: dict[str, object | None] = {
         "telemetry": None, "assessment": None, "self_check": None,
@@ -106,10 +122,10 @@ def create_app(db_path: Path | None = None) -> FastAPI:
         try:
             addr = ipaddress.ip_address(host)
         except ValueError:
-            raise HTTPException(403, "Yalnızca yerel görev ağı")
+            raise HTTPException(403, "Local mission network only")
         if not (addr.is_loopback or addr in ipaddress.ip_network("192.168.4.0/24")
                 or addr in ipaddress.ip_network("192.168.10.0/24")):
-            raise HTTPException(403, "Navigasyon kontrolü yalnızca yerel ağda")
+            raise HTTPException(403, "Navigation control only on local network")
 
     @api.get("/api/v1/navigation/status")
     def navigation_status() -> dict:
@@ -190,7 +206,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
             except Exception:
                 logging.exception("Calibration CSV recording error; live telemetry remains available")
                 calibration.active = False
-                calibration.last_quality_warning = "CSV kaydı durdu; yerel diski kontrol edin."
+                calibration.last_quality_warning = "CSV recording stopped; check local disk."
             state["link_status"] = "connected"
             return assessment
 
@@ -231,7 +247,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
 
     @api.post("/api/v1/calibration/start")
     def start_calibration(payload: CalibrationStartIn, request: Request) -> dict:
-        require_operator_ethernet(request)
+        require_calibration_operator(request)
         with lock:
             try:
                 result = calibration.start(consent=payload.consent)
@@ -242,7 +258,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
 
     @api.post("/api/v1/calibration/stop")
     def stop_calibration(request: Request) -> dict:
-        require_operator_ethernet(request)
+        require_calibration_operator(request)
         with lock:
             try:
                 result = calibration.stop()
@@ -264,18 +280,18 @@ def create_app(db_path: Path | None = None) -> FastAPI:
         with lock:
             last_packet = state["telemetry"]
             if isinstance(last_packet, TelemetryIn) and state["link_status"] != "lost":
-                # Zaman geçtikçe son ölçüm eskir; yeniden POST gerekmez.
+                # As time passes, the last measurement becomes obsolete; no re-POST required.
                 update_assessment(make_assessment(last_packet))
             assessment = deepcopy(state["assessment"])
             routing = assessment.get("route_plan") if isinstance(assessment, dict) else route_plan(
                 packet=None, confidence=None, hadse_status=None, self_check=None,
             )
             if state["link_status"] == "lost" and isinstance(assessment, dict):
-                # Simülasyonda bilinen bağlantı kaybında eski kararı güvenilir sayma.
+                # Considering the old decision reliable in case of known connection loss in the simulation.
                 assessment["confidence"] = {"score": 0.0, "usable": False, "reasons": ["link_loss"]}
                 assessment["decision"] = {
                     "status": "abstain", "score": None,
-                    "reason": "Öneri üretilmedi: yeni telemetri gelmiyor; bağlantı kayıp.",
+                    "reason": "Recommendation not produced: new telemetry not coming; The connection is lost.",
                     "source": assessment["telemetry"]["source"],
                     "human_review_required": True,
                 }

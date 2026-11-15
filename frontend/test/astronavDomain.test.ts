@@ -2,38 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {metres,turnInstruction,navStatusLabel,createNavProjector,type NavStatus} from '../src/astronavDomain.ts';
 
-test('göreli mesafe okunabilir, geçersiz mesafe gizlenir',()=>{
- assert.equal(metres(10),'10,0 m');
- assert.equal(metres(1.25),'1,3 m');
+test("relative distance can be read, invalid distance is hidden",()=>{
+ assert.equal(metres(10),'10.0 m');
+ assert.equal(metres(1.25),'1.3 m');
  assert.equal(metres(null),'—');
  assert.equal(metres(Number.NaN),'—');
 });
-test('sol, sağ, düz ve bilinmeyen yön komutları ayrılır',()=>{
- assert.equal(turnInstruction(0),'Düz devam');
- assert.equal(turnInstruction(16),'Düz devam');
- assert.match(turnInstruction(45),/sağa/i);
- assert.match(turnInstruction(-90),/Sola/i);
- assert.match(turnInstruction(175),/Geri/i);
- assert.equal(turnInstruction(null),'Yön doğrulanamadı');
+test("left, right, straight and unknown direction commands are separated",()=>{
+ assert.equal(turnInstruction(0),"Continue straight");
+ assert.equal(turnInstruction(16),"Continue straight");
+ assert.match(turnInstruction(45),/right/i);
+ assert.match(turnInstruction(-90),/left/i);
+ assert.match(turnInstruction(175),/reverse|back/i);
+ assert.equal(turnInstruction(null),"Direction could not be verified");
 });
-test('mod ile varış bildirimi birbirinden ayrılır',()=>{
+test("mode and arrival notification are separated",()=>{
  const empty={
   session_status:'idle',mode:'unavailable',device_id:null,demo:false,goal_type:'target',
  } as NavStatus;
- assert.match(navStatusLabel(empty),/başlatılmadı/i);
- assert.match(navStatusLabel({...empty,session_status:'active',mode:'unavailable',demo:false}),/sensör/i);
- assert.match(navStatusLabel({...empty,session_status:'active',mode:'estimated',demo:false,goal_type:'tracking'}),/telemetri/i);
- assert.match(navStatusLabel({...empty,session_status:'active',mode:'estimated',demo:false,goal_type:'base'}),/üs yönü/i);
- assert.match(navStatusLabel({...empty,session_status:'completed',goal_type:'base'}),/Üs yakınlığı/i);
+ assert.match(navStatusLabel(empty),/not started/i);
+ assert.match(navStatusLabel({...empty,session_status:'active',mode:'unavailable',demo:false}),/sensor/i);
+ assert.match(navStatusLabel({...empty,session_status:'active',mode:'estimated',demo:false,goal_type:'tracking'}),/telemetry/i);
+ assert.match(navStatusLabel({...empty,session_status:'active',mode:'estimated',demo:false,goal_type:'base'}),/base direction/i);
+ assert.match(navStatusLabel({...empty,session_status:'completed',goal_type:'base'}),/base proximity/i);
 });
-test('2D koordinat projeksiyonu merkezde üssü ve kuzey yönünü korur',()=>{
+test("2D coordinate projection preserves base and north direction at center",()=>{
  const project=createNavProjector([[0,0],[0,10],[3,4]]);
  const base=project([0,0]),north=project([0,10]);
  assert.ok(base.every(Number.isFinite));
- assert.ok(north[1]<base[1], 'Kuzey ekranda yukarıda görünmeli');
- assert.ok(project([5,0])[0]>base[0], 'Doğu sağda görünmeli');
+ assert.ok(north[1]<base[1], "North should appear above the screen");
+ assert.ok(project([5,0])[0]>base[0], "East should appear on the right");
 });
-test('tek noktalı veya boş rota listesinde de güvenli projeksiyon',()=>{
+test("Safe projection also on single-point or empty route lists",()=>{
  const project=createNavProjector([]);
  assert.deepEqual(project([0,0]),[250,135]);
 });

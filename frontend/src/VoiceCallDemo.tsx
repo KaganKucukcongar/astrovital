@@ -4,7 +4,7 @@ import {
   type VoiceCallDirection, type VoiceCallPhase, type VoiceCallTarget
 } from './voiceCallModel';
 
-// İkonlar yerel SVG ile çizilir. Mikrofon izni veya gerçek ses aktarımı yoktur.
+// Icons are drawn with native SVG. There is no microphone permission or actual audio transmission.
 function VoiceGlyph({name,size=19}:{name:'phone'|'mic'|'volume'|'end'|'close'|'radio'|'shield'|'clock'|'check';size?:number}) {
   const paths:Record<string,ReactNode>={
     phone:<path d="M22 16.8v3a2 2 0 0 1-2.2 2A19.7 19.7 0 0 1 2.2 4.2 2 2 0 0 1 4.2 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.7L7.2 10a16 16 0 0 0 6.8 6.8l1.6-1.9a2 2 0 0 1 1.7-.6l3 .5a2 2 0 0 1 1.7 2Z"/>,
@@ -24,17 +24,17 @@ export function VoiceCallPanel({compact=false,onStart}:{
   compact?:boolean;onStart:(target:VoiceCallTarget,direction:VoiceCallDirection)=>void;
 }) {
   if(compact)return <div className="voice-quick-panel">
-    <div className="voice-quick-status"><span className="voice-demo-dot"/><b>SESLİ GÖRÜŞME · DEMO</b><span>Yerel arayüz prototipi</span></div>
-    <p>Mesajlaşma yerine görev merkezini veya EVA ekibini sesli çağrı arayüzüyle canlandırın.</p>
+    <div className="voice-quick-status"><span className="voice-demo-dot"/><b>VOICE CALL · DEMO</b><span>Native interface prototype</span></div>
+    <p>Bring the mission center or EVA team to life with a voice call interface instead of messaging.</p>
     <div className="voice-quick-actions">
-      <button type="button" className="voice-call-primary" onClick={()=>onStart('mission','outgoing')}><VoiceGlyph name="phone" size={17}/> Görev Merkezini Ara</button>
+      <button type="button" className="voice-call-primary" onClick={()=>onStart('mission','outgoing')}><VoiceGlyph name="phone" size={17}/> Search for Task Center</button>
       <button type="button" className="voice-call-secondary" onClick={()=>onStart('eva','outgoing')}>EVA Ekibi</button>
     </div>
-    <small>Çağrı popup olarak açılır. Mikrofon veya gerçek iletişim kullanılmaz.</small>
+    <small>The call opens as a popup. No microphones or actual communication are used.</small>
   </div>;
   return <div className="voice-page">
     <div className="voice-page-hero">
-      <div className="voice-hero-identity"><span className="voice-hero-icon"><VoiceGlyph name="radio" size={30}/></span><div><span className="voice-eyebrow">MARSUP / GÖREV İLETİŞİM AĞI</span><h2>Sesli İletişim Terminali</h2><p>Görev merkezi ile mürettebat arasındaki sesli aramanın görsel prototipi.</p></div></div>
+      <div className="voice-hero-identity"><span className="voice-hero-icon"><VoiceGlyph name="radio" size={30}/></span><div><span className="voice-eyebrow">MARSUP / MISS COMMUNICATION NETWORK</span><h2>Voice Communication Terminal</h2><p>Visual prototype of a voice call between the mission center and the crew.</p></div></div>
       <span className="voice-demo-stamp">DEMO MODU</span>
     </div>
     <div className="voice-contact-grid">
@@ -43,12 +43,12 @@ export function VoiceCallPanel({compact=false,onStart}:{
         <strong>{VOICE_TARGETS[target].label}</strong>
         <p>{VOICE_TARGETS[target].role}</p>
         <span className="voice-contact-code">{VOICE_TARGETS[target].code}</span>
-        <button type="button" className="voice-call-primary" onClick={()=>onStart(target,'outgoing')}><VoiceGlyph name="phone" size={17}/> Aramayı Başlat</button>
+        <button type="button" className="voice-call-primary" onClick={()=>onStart(target,'outgoing')}><VoiceGlyph name="phone" size={17}/> Start Search</button>
       </div>)}
     </div>
     <div className="voice-page-footer-grid">
-      <div className="voice-information"><VoiceGlyph name="shield" size={23}/><div><strong>Güvenli demo davranışı</strong><p>Görüşme kuruldu, mikrofon açık ve hoparlör etkin göstergeleri yalnızca arayüz durumlarıdır. Gerçek ses, çağrı kaydı, telsiz veya internet bağlantısı yoktur.</p></div></div>
-      <div className="voice-incoming-demo"><strong>Gelen çağrı görünümünü test et</strong><p>Görev merkezinden örnek bir çağrı gelsin. Açılan pencereden cevapla veya reddet.</p><button type="button" className="voice-call-secondary" onClick={()=>onStart('mission','incoming')}>Gelen Demo Çağrıyı Göster</button></div>
+      <div className="voice-information"><VoiceGlyph name="shield" size={23}/><div><strong>Safe demo behavior</strong><p>The call established, microphone on, and speakerphone active indicators are interface states only. There is no real audio, call recording, radio or internet connection.</p></div></div>
+      <div className="voice-incoming-demo"><strong>Test incoming call view</strong><p>Let's get a sample call from the duty center. Answer or reject from the pop-up window.</p><button type="button" className="voice-call-secondary" onClick={()=>onStart('mission','incoming')}>Show Incoming Demo Call</button></div>
     </div>
   </div>;
 }
@@ -62,7 +62,7 @@ export function VoiceCallModal({target,direction,onClose}:{
   const [speakerEnabled,setSpeakerEnabled]=useState(true);
   const closeRef=useRef<HTMLButtonElement>(null);
   useEffect(()=>{
-    // Gerçek iletişim kurulmaz; 1.8 saniye sonra başarı durumu simüle edilir.
+    // Real communication is not established; After 1.8 seconds the success condition is simulated.
     if(direction!=='outgoing')return;
     const timer=window.setTimeout(()=>setPhase('connected'),1800);
     return ()=>window.clearTimeout(timer);
@@ -85,7 +85,7 @@ export function VoiceCallModal({target,direction,onClose}:{
   const ended=phase==='ended';
   return <div className="voice-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
     <section className="voice-modal" role="dialog" aria-modal="true" aria-labelledby="voice-dialog-title" aria-describedby="voice-dialog-description">
-      <header className="voice-modal-top"><span>ASTROVITAL X <b>· SESLİ İLETİŞİM</b></span><span className="voice-modal-demo">TAMAMEN DEMO</span><button type="button" className="voice-modal-close" ref={closeRef} onClick={onClose} aria-label="Arama penceresini kapat"><VoiceGlyph name="close" size={18}/></button></header>
+      <header className="voice-modal-top"><span>ASTROVITAL X <b>· VOICE COMMUNICATION</b></span><span className="voice-modal-demo">TAMAMEN DEMO</span><button type="button" className="voice-modal-close" ref={closeRef} onClick={onClose} aria-label="Arama penceresini kapat"><VoiceGlyph name="close" size={18}/></button></header>
       <div className="voice-modal-body">
         <div className="voice-modal-orbit"><div className={'voice-avatar-orbit voice-avatar-'+phase}><VoiceGlyph name="radio" size={39}/></div></div>
         <span className={'voice-call-status voice-status-'+phase}><span className="voice-demo-dot"/>{demoCallPhaseLabel(phase,direction)}</span>
@@ -93,18 +93,18 @@ export function VoiceCallModal({target,direction,onClose}:{
         <p id="voice-dialog-description">{remote.role} · {remote.code}</p>
         <div className="voice-call-timer"><VoiceGlyph name="clock" size={15}/>{connected||ended?formatDemoCallDuration(seconds):'00:00'}</div>
         <div className="voice-call-waveform" aria-hidden="true">{Array.from({length:22},(_,i)=><span key={i} style={{height:(8+(i*19)%31)+'px'}}/>)}</div>
-        <p className="voice-call-privacy">Ses iletilmiyor. Mikrofon ve hoparlör düğmeleri yalnızca görsel simülasyondur.</p>
+        <p className="voice-call-privacy">No sound is transmitted. The microphone and speaker buttons are visual simulation only.</p>
       </div>
       {phase==='ringing'?<div className="voice-incoming-actions">
         <button type="button" className="voice-call-decline" onClick={()=>setPhase('ended')}><VoiceGlyph name="end"/> Reddet</button>
-        <button type="button" className="voice-call-accept" onClick={()=>setPhase('connected')}><VoiceGlyph name="phone"/> Yanıtla</button>
+        <button type="button" className="voice-call-accept" onClick={()=>setPhase('connected')}><VoiceGlyph name="phone"/> Reply</button>
       </div>:ended?<div className="voice-call-ended-actions">
-        <p>Demo görüşme sonlandırıldı</p>
+        <p>Demo call has been terminated</p>
         <button type="button" className="voice-call-primary" onClick={onClose}>Pencereyi Kapat</button>
       </div>:<div className="voice-modal-controls">
-        <button type="button" className={'voice-control '+(micMuted?'voice-control-off':'')} disabled={!connected} aria-pressed={micMuted} onClick={()=>setMicMuted(v=>!v)}><VoiceGlyph name="mic"/><span>{micMuted?'Mikrofon kapalı':'Mikrofon açık'}</span></button>
-        <button type="button" className={'voice-control '+(!speakerEnabled?'voice-control-off':'')} disabled={!connected} aria-pressed={!speakerEnabled} onClick={()=>setSpeakerEnabled(v=>!v)}><VoiceGlyph name="volume"/><span>{speakerEnabled?'Hoparlör açık':'Hoparlör kapalı'}</span></button>
-        <button type="button" className="voice-control voice-control-end" onClick={()=>setPhase('ended')}><VoiceGlyph name="end"/><span>Aramayı Bitir</span></button>
+        <button type="button" className={'voice-control '+(micMuted?'voice-control-off':'')} disabled={!connected} aria-pressed={micMuted} onClick={()=>setMicMuted(v=>!v)}><VoiceGlyph name="mic"/><span>{micMuted?"microphone off":"microphone on"}</span></button>
+        <button type="button" className={'voice-control '+(!speakerEnabled?'voice-control-off':'')} disabled={!connected} aria-pressed={!speakerEnabled} onClick={()=>setSpeakerEnabled(v=>!v)}><VoiceGlyph name="volume"/><span>{speakerEnabled?"speaker on":"speaker off"}</span></button>
+        <button type="button" className="voice-control voice-control-end" onClick={()=>setPhase('ended')}><VoiceGlyph name="end"/><span>End Call</span></button>
       </div>}
       <div className="voice-modal-bottom">SIMULATION ONLY <span>NO AUDIO · NO WEBRTC · NO RECORDING</span></div>
     </section>

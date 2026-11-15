@@ -30,7 +30,7 @@ def assess_confidence(
     """
     now = now or datetime.now(timezone.utc)
     if not observed_at.tzinfo or not now.tzinfo:
-        raise ValueError("Zaman damgaları saat dilimi içermelidir")
+        raise ValueError("Timestamps must include timezone")
     age_seconds = (now - observed_at).total_seconds()
     reasons: list[str] = []
 
@@ -45,7 +45,7 @@ def assess_confidence(
     if not has_sensor_reading:
         reasons.append("missing_sensor_reading")
 
-    # Bu skor biyomedikal güvenilirlik değil, yalnızca demo veri kalitesi göstergesi.
+    # This score is only an indicator of demo data quality, not biomedical reliability.
     quality = min(1.0, max(0.0, signal_quality))
     movement_factor = 0.5 if acceleration_g > 2.0 or acceleration_g < 0 else 1.0
     freshness_factor = 0.2 if age_seconds > 5 or age_seconds < -2 else 1.0

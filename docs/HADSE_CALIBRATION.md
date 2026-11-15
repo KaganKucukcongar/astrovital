@@ -1,44 +1,44 @@
-# AstroVital X · HADSE Kalibrasyon ve CSV Toplama
+# AstroVital X · HADSE Calibration and CSV Collection
 
-## Nasıl başlatılır?
-1. Katılımcıdan açık, bilgilendirilmiş onay al. Katılımcı veya sensör kullanıcısı yetişkin değilse bir ebeveyn/yetkili yetişkinin de onayını al.
-2. Bilgisayarda Ethernet üzerinden `http://192.168.10.1:5173/` sayfasını aç.
-3. **Sağlık Analizi ve HADSE → Kişisel Kalibrasyon ve CSV Kaydı** bölümüne git.
-4. Sensörün ve ESP32 veri bağlantısının çalıştığını doğrula.
-5. Onay kutusunu işaretle ve **Onaylı kalibrasyonu başlat** düğmesine bas.
-6. İlk aşamada kişi rahat ve hareketsiz durumda ölçülmeli. Her kanal için 20 kaliteli örnek gerektiğini unutma. Nabız ve SpO₂ kanalları ayrı kalibre edilir.
-7. Referans oluşunca sistem sonraki ölçümleri bu referansla karşılaştırır. Anomali yalnızca ardışık 3 kaliteli ölçümde sapma varsa aday olarak işaretlenir.
-8. İş bitince **CSV kaydını durdur**. Onay verilmeyen kişi için başlatma.
+## How to start?
+1. Obtain clear, informed consent from the participant. If the participant or sensor user is not an adult, also obtain consent from a parent/authorized adult.
+2. Open the `http://192.168.10.1:5173/` page on the computer via Ethernet.
+3. Go to **Health Analysis and HADSE → Personal Calibration and CSV Recording**.
+4. Verify that the sensor and ESP32 data link are working.
+5. Tick ​​the checkbox and press the **Start confirmed calibration** button.
+6. In the first stage, the person should be measured in a relaxed and motionless state. Note that 20 quality samples are required for each channel. Pulse and SpO₂ channels are calibrated separately.
+7. Once a reference is established, the system compares subsequent measurements with this reference. An anomaly is marked as a candidate only if there is deviation in 3 consecutive quality measurements.
+8. **Stop CSV recording** when finished. Initialization for non-approved person.
 
 ## Ne kaydediliyor?
-Yeni CSV kaydı onay verilene kadar **kapalıdır**. Kayıt açıldığında yalnızca `source=measured` paketleri kaydedilir. CSV sütunları arasında UTC cihaz/alış zamanı, sıra numarası, nabız, tahmini SpO₂, hareket (g), sinyal kalitesi, sıcaklık, basınç, tahmini irtifa, pusula, bazal referanslar, anomali adayı ve öneri bulunur.
+New CSV registration is **closed** until approval is given. When registration is turned on, only `source=measured` packages are recorded. CSV columns include UTC device/acquisition time, sequence number, pulse, estimated SpO₂, motion (g), signal quality, temperature, pressure, estimated altitude, compass, baseline references, anomaly candidate, and recommendation.
 
-CSV'de isim, telefon, açık kimlik veya adres bulunmaz. `verified_label` ve `reviewer_notes` sütunları boş bırakılır: algoritmanın kendi tahmini **doğru etiket** diye kullanılamaz.
+CSV does not contain names, phone numbers, clear IDs or addresses. The `verified_label` and `reviewer_notes` columns are left blank: the algorithm's own prediction cannot be used as a **correct label**.
 
 ## CSV nerede?
 Pi: `/home/mustafa/astrovital/backend/data/calibration_sessions/session_...csv`
-Dosya izinleri: 0600; klasör izinleri: 0700.
-Otomatik internete yükleme veya dashboard üzerinden herkese açık CSV indirme API'si yoktur.
+File permissions: 0600; folder permissions: 0700.
+There is no automatic web upload or public CSV download API from the dashboard.
 
-Oturum bittikten sonra bilgisayarda şu komutu çalıştır:
+After the session ends, run the following command on the computer:
 `python tools/calibration_csv_to_windows.py`
 
-Dosyalar `~/Downloads/AstroVital_Kalibrasyon_CSV` klasörüne SSH ile aktarılır.
+Files are transferred via SSH to the `~/Downloads/AstroVital_Kalibsyon_CSV` folder.
 
-## Anomali algoritması nasıl çalışır?
-- Başlangıç referansı, en az 20 sakin ve kaliteli sensör değerinin medyanıdır.
-- Sağlıklı kalibrasyon için sinyal kalitesi en az 0,75 ve ivme yaklaşık 1g yakınında olmalı.
-- Nabızda referanstan `max(12 BPM, 4 × MAD)` kadar sapma; tahmini SpO₂'de aşağı yönde `max(4 yüzde puan, 4 × MAD)` sapma incelenmeye aday olabilir.
-- Sapma **3 ardışık geçerli** pakette sürmeden anomali adayı oluşturulmaz.
-- Hareket/sinyal sorunu varsa kişisel sağlık anomalisi değil, **ölçüm doğrulama uyarısı** gösterilir.
-- Bağlantı yoksa yeni sonuç üretilmez. Önceki olay zaman damgasıyla kalır.
-- Her oturum en fazla 1.800 paket toplar; sonra CSV kaydı otomatik durur.
+## How does the anomaly algorithm work?
+- The starting reference is the median of at least 20 quiet, high-quality sensor values.
+- For a healthy calibration, the signal quality should be at least 0.75 and the acceleration should be around 1g.
+- Heart rate deviation from reference by `max(12 BPM, 4 × MAD); A `max(4 percentage points, 4 × MAD)` downward deviation in estimated SpO₂ may be a candidate for examination.
+- An anomaly candidate is not created until the deviation is driven in **3 consecutive valid** packets.
+- If there is a motion/signal problem, a **measurement verification warning** is displayed, not a personal health anomaly.
+- If there is no connection, no new results are produced. The previous event remains with the timestamp.
+- Each session collects up to 1,800 packets; then CSV recording stops automatically.
 
-Bunlar **kişisel referansa dayalı prototip kurallardır**, klinik normlar, eğitimli ML modeli veya doğrulanmış tıbbi eşikler değildir. Özellikle optik sensör ve kalibrasyon hataları yanlış alarm veya kaçırılan anomaliye sebep olabilir. Uygulama kişiye sağlık güvencesi vermez; gerçek belirtiler varsa uygun sağlık desteğine başvurulmalı.
+These are **prototype rules based on personal reference**, not clinical norms, trained ML model, or validated medical thresholds. In particular, optical sensor and calibration errors can cause false alarms or missed anomalies. The application does not provide health insurance to the person; If there are real symptoms, appropriate health support should be sought.
 
 ## Gizlilik
-- Katılımcının izni olmadan kayıt başlatma.
-- CSV sağlık ölçümü içerir: izinsiz paylaşma, açık GitHub deposuna koyma veya internete yükleme.
-- Mevcut AstroVital **Mission Black Box SQLite kayıtları**, bu yeni CSV modundan ayrı olarak telemetri kaydetmeye devam eder. Katılımcıya bunu da önceden açıkla.
-- CSV oturumu kapatılınca otomatik silinmez; gerekli süre sonunda Pi ve varsa bilgisayar kopyalarını güvenli şekilde sil.
-- CSV başlatma/durdurma yalnızca Pi'nin **Ethernet operatör ağı (192.168.10.0/24)** üzerinden kabul edilir. Hotspot'tan veya internetten açılmaz.
+- Starting a recording without the participant's permission.
+- CSV health measurement includes: sharing without permission, putting in an open GitHub repository, or uploading to the internet.
+- Existing AstroVital **Mission Black Box SQLite recordings** continue to record telemetry apart from this new CSV mode. Explain this to the participant in advance.
+- CSV is not automatically deleted when you log out; After the required period, securely delete the Pi and any computer copies.
+- CSV start/stop is accepted only over the Pi's **Ethernet carrier network (192.168.10.0/24)**. It does not open from hotspot or internet.
