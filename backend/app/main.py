@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.blackbox import BlackBox
 from app.audio_bridge import AudioBridge
+from app.astronav import AstroNavEngine, NavStartIn, NavStepIn, NavRouteIn, NavApprovalIn, NavReturnIn
 from app.calibration import CalibrationRecorder
 from app.confidence import assess_confidence
 from app.hadse import evaluate
@@ -34,6 +35,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     lock = Lock()
     calibration = CalibrationRecorder(blackbox.path.parent / "calibration_sessions")
     audio_bridge = AudioBridge()  # Async and independent of the telemetry Lock.
+    astronav = AstroNavEngine()  # Real ESP32 dead reckoning only; no GPS or terrain.
 
     def require_operator_ethernet(request: Request) -> None:
         # Measurement capture is explicitly opt-in and never remotely
@@ -98,6 +100,66 @@ def create_app(db_path: Path | None = None) -> FastAPI:
     async def audio_status() -> dict[str, bool]:
         return await audio_bridge.status()
 
+    def require_navigation_lan(request: Request) -> None:
+        # Local demo only. This is NOT a production authentication scheme.
+        host = request.client.host if request.client else ""
+        try:
+            addr = ipaddress.ip_address(host)
+        except ValueError:
+            raise HTTPException(403, "Yalnızca yerel görev ağı")
+        if not (addr.is_loopback or addr in ipaddress.ip_network("192.168.4.0/24")
+                or addr in ipaddress.ip_network("192.168.10.0/24")):
+            raise HTTPException(403, "Navigasyon kontrolü yalnızca yerel ağda")
+
+    @api.get("/api/v1/navigation/status")
+    def navigation_status() -> dict:
+        return astronav.status()
+
+    @api.get("/api/v1/navigation/guidance")
+    def navigation_guidance(device_id: str = Query(min_length=1, max_length=64)) -> dict:
+        # Existing Nano ESP32 firmware expects these keys for the OLED NAV page.
+        return astronav.guidance(device_id)
+
+    @api.post("/api/v1/navigation/start")
+    def navigation_start(payload: NavStartIn, request: Request) -> dict:
+        require_navigation_lan(request)
+        result = astronav.start(payload)
+        blackbox.append("astronav_started", {"device_id":payload.device_id,
+            "mode":payload.mode,"position_source":"pedometer_dead_reckoning"})
+        return result
+
+    @api.post("/api/v1/navigation/propose")
+    def navigation_propose(payload: NavRouteIn, request: Request) -> dict:
+        require_navigation_lan(request)
+        return astronav.propose(payload)
+
+    @api.post("/api/v1/navigation/approve")
+    def navigation_approve(payload: NavApprovalIn, request: Request) -> dict:
+        require_navigation_lan(request)
+        result = astronav.approve(payload)
+        blackbox.append("astronav_route_decision", {
+            "approved":payload.approved,"route_id":result["active_route_id"]})
+        return result
+
+    @api.post("/api/v1/navigation/return")
+    def navigation_return(payload: NavReturnIn, request: Request) -> dict:
+        require_navigation_lan(request)
+        result = astronav.return_to_base(payload)
+        blackbox.append("astronav_return_to_base", {"approved":True})
+        return result
+
+    @api.post("/api/v1/navigation/demo-step")
+    def navigation_demo_step(payload: NavStepIn, request: Request) -> dict:
+        require_navigation_lan(request)
+        return astronav.demo_step(payload)
+
+    @api.post("/api/v1/navigation/reset")
+    def navigation_reset(request: Request) -> dict:
+        require_navigation_lan(request)
+        result = astronav.reset()
+        blackbox.append("astronav_reset", {"status":"idle"})
+        return result
+
     @api.get("/health")
     def health() -> dict:
         return {"status": "ok", "system": "AstroVital X", "version": "0.3.0"}
@@ -112,6 +174,7 @@ def create_app(db_path: Path | None = None) -> FastAPI:
             assessment = make_assessment(packet)
             state["telemetry"] = packet
             update_assessment(assessment)
+            astronav.observe(packet)
             blackbox.append("telemetry_assessed", assessment)
             # CSV is written ONLY during a consented, explicitly started session.
             # A recording failure must never interrupt the ESP32 telemetry API.

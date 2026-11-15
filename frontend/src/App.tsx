@@ -7,6 +7,7 @@ import { nextApiConnection } from './apiConnectivity';
 import { selectOverviewMissionAnalysis } from './calibrationOverview';
 import {VoiceCallModal, VoiceCallPanel} from './VoiceCallDemo';
 import {LiveRadioPanel, LiveRadioSummary} from './LiveRadio';
+import {AstroNavPanel, AstroNavSummary} from './AstroNav';
 import {type VoiceCallDirection, type VoiceCallTarget} from './voiceCallModel';
 
 const API = import.meta.env.VITE_API_BASE || window.location.protocol + '//' + window.location.hostname + ':8000';
@@ -38,6 +39,7 @@ const NAV: { id: Page; label: string; icon: string; section: string }[] = [
   { id: 'overview', label: 'Genel Bakış', icon: 'grid', section: 'İZLEME' },
   { id: 'telemetry', label: 'Canlı Telemetri', icon: 'activity', section: 'İZLEME' },
   { id: 'hadse', label: 'Sağlık Analizi ve HADSE', icon: 'pulse', section: 'İZLEME' },
+  { id: 'astronav', label: 'AstroNav | Üsse Dönüş', icon: 'compass', section: 'İZLEME' },
   { id: 'voice', label: 'Sesli İletişim (Telsiz)', icon: 'phone', section: 'İZLEME' },
   { id: 'blackbox', label: 'Görev Kayıtları', icon: 'database', section: 'SİSTEM' },
   { id: 'sensors', label: 'Sensörler ve Bağlantı', icon: 'radio', section: 'SİSTEM' },
@@ -51,6 +53,7 @@ const ICON_PATHS: Record<string, ReactNode> = {
   pulse: <><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0l-1 1-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M4 12h4l2-3 3 6 2-3h4"/></>,
   clipboard: <><rect x="5" y="4" width="14" height="18" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-5"/></>,
   phone: <path d="M22 16.8v3a2 2 0 0 1-2.2 2A19.7 19.7 0 0 1 2.2 4.2 2 2 0 0 1 4.2 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.7L7.2 10a16 16 0 0 0 6.8 6.8l1.6-1.9a2 2 0 0 1 1.7-.6l3 .5a2 2 0 0 1 1.7 2Z"/>,
+  compass: <><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5Z"/></>,
   database: <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></>,
   radio: <><circle cx="12" cy="12" r="2"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16M20 4a11 11 0 0 1 0 16"/></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
@@ -404,6 +407,14 @@ export default function App() {
   const altitudeText = environmental?.altitudeM == null ? 'Ölçüm yok' : environmental.altitudeM.toFixed(0)+' m';
   const headingText = environmental?.headingDeg == null ? 'Ölçüm yok' :
     environmental.headingDeg.toFixed(0)+'° '+compassDirection(environmental.headingDeg);
+  // AstroNav estimated mode requires live calibrated heading + calibrated step/stride.
+  const navTelemetry = apiMission?.assessment?.telemetry;
+  const navCanEstimate = mode === 'api' && liveMeasured &&
+    environmental?.headingCalibrated === true && environmental.headingDeg !== null &&
+    typeof navTelemetry?.steps_total === 'number' &&
+    typeof navTelemetry?.stride_length_m === 'number' &&
+    navTelemetry.stride_length_m >= 0.3 && navTelemetry.stride_length_m <= 1.5;
+  const navDeviceId = last?.source==='measured' ? last.deviceId : 'astrovital-esp32-01';
   // Gerçek cihaz veri göndermeye başladığında API simülasyonunu otomatik durdur.
   useEffect(() => {
     if (mode === 'api' && liveMeasured && running) setRunning(false);
@@ -551,6 +562,7 @@ export default function App() {
     overview:{eyebrow:'GÖREV MERKEZİ / GENEL DURUM',title:'Görev Genel Bakış',subtitle:'Astronot sağlığı ve görev telemetrisini tek merkezden izleyin.'},
     telemetry:{eyebrow:'GERÇEK ZAMANLI İZLEME',title:'Canlı Telemetri',subtitle:'Ölçümleri, sinyal güvenilirliğini ve zaman içindeki değişimleri inceleyin.'},
     hadse:{eyebrow:'KARAR DESTEK SİSTEMİ',title:'Sağlık Analizi ve HADSE',subtitle:'Veri kalite kontrolleri ve açıklanabilir operasyonel değerlendirmeler.'},
+    astronav:{eyebrow:'ASTRONAV / CANLI GÖRELİ KONUM',title:'AstroNav | Üsse Dönüş',subtitle:'ESP32 adım ve pusula telemetrisiyle iz takibi ve üs yönü hesabı. Simülasyon kullanılmaz.'},
     voice:{eyebrow:'GÖREV HABERLEŞMESİ / CANLI PCM',title:'Sesli İletişim (Telsiz)',subtitle:'ESP32 ile 8 kHz WebSocket üzerinden dinleme ve bas-konuş; görsel arama demoları ayrı.'},
     blackbox:{eyebrow:'MISSION BLACK BOX',title:'Görev Kayıtları',subtitle:'Ölçüm, bağlantı ve öz değerlendirme olaylarının zaman çizelgesi.'},
     sensors:{eyebrow:'CİHAZ DURUMU',title:'Sensörler ve Bağlantı',subtitle:'Veri akışı, haberleşme zinciri ve donanım durumunu izleyin.'},
@@ -646,6 +658,9 @@ export default function App() {
               <LiveRadioSummary onOpen={()=>setPage('voice')}/>
             </Panel>
           </div>
+          {<Panel title="AstroNav | Üsse Dönüş" subtitle="Göreli konum, 10 m rota ve açık operatör onayı" action={<Pill tone="info">SENTETİK HARİTA</Pill>}>
+            <AstroNavSummary apiBase={API} onOpen={()=>setPage('astronav')}/>
+          </Panel>}
           <div className="figma-bottom-grid">
             <Panel title="Ortam ve Pusula" className="figma-bottom-panel" action={<span className={liveMeasured?'figma-live-label':'figma-env-source'}>{envStatus}</span>}>
               <div className="figma-detail-list">
@@ -689,6 +704,11 @@ export default function App() {
             {[['01','VERİ TOPLAMA','Nabız, tahmini SpO₂, hareket ve öz bildirim'],['02','DOĞRULAMA','Sinyal kalitesi, hareket ve zaman damgası'],['03','DEĞERLENDİRME','Kural tabanlı analiz, gerektiğinde çekimser kalma'],['04','EYLEM VE KAYIT','İnsan değerlendirmesi ve Mission Black Box']].map(x=><div className="workflow-step" key={x[0]}><span>{x[0]}</span><strong>{x[1]}</strong><p>{x[2]}</p></div>)}</div></Panel>
           <div className="science-note"><Icon name="alert" size={18}/><div><strong>Klinik sistem değildir</strong><span>Bu araç tıbbi risk yüzdesi, tanı veya doktor yerine geçecek tedavi önerisi üretmez. İhtiyaç durumunda görev sağlık protokolü izlenmelidir.</span></div></div>
         </>}
+
+        {page==='astronav' && <Panel title="AstroNav | Navigasyon ve Üsse Dönüş" subtitle="Adım ve pusula tahmini · Sentetik A/B/C alternatifleri · Açık onay" action={<Pill tone="warn">GÖRELİ / DEMO</Pill>}>
+          <AstroNavPanel apiBase={API} deviceId={navDeviceId}
+            canEstimate={navCanEstimate} sensorHeading={environmental?.headingDeg??null}/>
+        </Panel>}
 
         {page==='voice' && <>
           <Panel title="Canlı Sesli İletişim (Telsiz)" subtitle="ESP32 ↔ Raspberry Pi ↔ Dashboard · gerçek 8 kHz PCM ses köprüsü" action={<Pill tone="good">CANLI WS</Pill>}>
