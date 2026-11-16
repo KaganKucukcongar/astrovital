@@ -1,112 +1,220 @@
 # AstroVital X
 
-AstroVital X is a research prototype for astronaut telemetry monitoring and explainable, rule-based mission decision support. It combines a FastAPI backend with a React/TypeScript dashboard, a hardware-independent simulator, and a Raspberry Pi deployment.
+### Astronaut health monitoring that stays useful when Earth cannot answer immediately.
 
-This repository contains the M03 baseline and the November 15, 2026 AstroNav, live radio, hotspot CSV operator-control, and English-language interface updates. The operator interface and user-facing guidance are in English.
+**Team MarsUp** · **NASA Space Apps Challenge 2026** · **Sivas Local Event: 4th Place** · **Global Nominee**
 
-## Features
+**Challenge:** [Create Health Monitoring Software for Astronauts on Space Missions](https://www.spaceappschallenge.org/2026/challenges/health-monitoring-software/)
 
-- Telemetry intake with explicit `measured` or `simulated` source labels.
-- Sensor Confidence Engine: packet age, future timestamps, signal quality, motion and missing readings.
-- HADSE: transparent rules returning `continue`, `review`, or `abstain` with reasons. Invalid telemetry never receives an operational recommendation.
-- Astronaut Self-Check, synthetic route comparison, and a persisted Mission Black Box event log.
-- Browser dashboard and independent simulator modes (including low signal, high motion, stale/future packets, missing readings and link loss).
-- Raspberry Pi Wi-Fi hotspot / Ethernet operation without requiring internet access at runtime.
-- AstroNav: a 10 m heading-locked relative target, pedometer-based position estimation, return-to-base guidance, and magnetic-north / device-up map views; no GPS or obstacle avoidance.
-- Live 8 kHz PCM voice radio bridge with explicit microphone permission.
-- Opt-in personal-baseline CSV calibration; hotspot write access requires a separately stored operator key, and participant consent is always required.
+> **In one sentence:** AstroVital X connects a wearable sensor unit to a Raspberry Pi mission station so a crew can monitor health-related measurements, see when those measurements are unreliable, communicate locally, and receive experimental navigation assistance without requiring an internet connection.
 
-**Scope:** This is not a clinical diagnostic or medical device, does not use AI models, and does not autonomously navigate a real Mars route. Synthetic demo routes are not safety-certified. Measured hardware telemetry requires separate physical validation.
+## The problem
 
-## Repository structure
+On long-duration missions, crews cannot rely on immediate responses from Earth. Astronauts also work in demanding environments where motion, sensor contact, and communications interruptions can make raw health readings difficult to interpret.
 
-```text
-backend/
-  app/                FastAPI endpoints, rules, simulator, events and demo routes
-  tests/              Backend unit and HTTP tests
-  pyproject.toml
-frontend/
-  src/                React interface and local fallback HADSE
-  test/               Frontend domain tests
-  public/
-  package.json
-deploy/raspberry-pi/   systemd units and service runner scripts
-docs/                  Deployment and verification
+A number on a screen is not enough. A useful health-monitoring system should answer three questions:
+
+1. **What is being measured right now?**
+2. **Can we trust this measurement enough to interpret it?**
+3. **Can the astronaut and a nearby operator respond locally?**
+
+NASA's challenge calls for software that gathers health indicators and helps astronauts evaluate and act on their health status. We designed AstroVital X around that requirement: **measure → assess data quality → explain → communicate**.
+
+## Our solution
+
+AstroVital X is a **working terrestrial research prototype** composed of a wearable device, a local processing/communications station, and a mission-control interface.
+
+| Component | What it contributes |
+| --- | --- |
+| **Wearable sensor unit** | Acquires heart rate, estimated SpO₂, movement, orientation, and environmental measurements; displays local guidance on an OLED screen. |
+| **Sensor Confidence Engine** | Checks whether incoming measurements are usable, considering freshness, signal quality, excessive motion, and missing values. |
+| **HADSE** | Converts usable telemetry into *explainable, rule-based* mission-support states: `continue`, `review`, or `abstain`. |
+| **Personal calibration** | With consent, creates an individual reference from suitable readings and flags repeated deviations as candidates for human review. |
+| **AstroHotspot + two-way radio** | Keeps telemetry and live voice communication operating over a Raspberry Pi-hosted local Wi-Fi network, without internet access. |
+| **AstroNav** | Adds relative heading, schematic route alternatives, and return-to-base guidance to the local mission-support environment. |
+| **Mission Black Box** | Records mission events and telemetry assessments for subsequent review. |
+
+**The key design decision:** When telemetry is missing, stale, or unreliable, the system explains the problem rather than inventing a health conclusion. AstroVital X is **not** a medical diagnostic device and does not make autonomous clinical decisions.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[Wearable: Arduino Nano ESP32] -->|Measured telemetry over local Wi-Fi| B[Raspberry Pi / AstroHotspot]
+    B --> C[FastAPI telemetry service]
+    C --> D[Sensor Confidence Engine]
+    D --> E[HADSE: continue / review / abstain]
+    C --> F[Consent-based calibration]
+    C --> G[Mission Black Box]
+    C --> H[AstroNav: relative guidance]
+    E --> I[React mission-control dashboard]
+    F --> I
+    G --> I
+    H --> I
+    B <-->|WebSocket audio / push to talk| I
+    A <-->|Local voice channel| B
 ```
 
-## Run locally
+**Telemetry path:** The ESP32 reads connected sensors and sends packets to the Pi. FastAPI receives them, the Sensor Confidence Engine checks data quality, HADSE generates a transparent result where appropriate, and the dashboard displays the current situation and its data source.
 
-Requires Python 3.11+ and Node.js 22+.
+**Communication path:** The Pi creates **AstroHotspot**, a local Wi-Fi access point. Within tested coverage, the wearable and dashboard can exchange data and two-way voice without relying on internet service. The voice bridge uses WebSocket and 8 kHz, 8-bit unsigned mono PCM audio. This is a **local radio-style intercom prototype**, not a satellite link.
 
-**Backend** (terminal 1):
+**Navigation path:** The current AstroNav prototype uses calibrated magnetic heading and estimated steps to track *relative* movement. Its selectable A/B/C paths are geometric demonstrations, not surveyed terrain routes.
 
-```sh
+## What makes AstroVital X different?
+
+Rather than treating health monitoring as an isolated chart, the prototype combines **four connected capabilities**:
+
+- **Uncertainty is visible.** The system distinguishes `measured` from `simulated` data and refuses to issue recommendations when quality checks fail.
+- **Interpretation is explainable.** HADSE returns an explicit reason and requires human oversight, rather than making opaque medical claims.
+- **The response can stay local.** Live telemetry and an operational two-way voice channel share the same independent Raspberry Pi network.
+- **The astronaut has a useful interface.** The wearable OLED and dashboard expose directional information, with AstroNav serving as an experimental support tool beyond the core health challenge.
+
+This integration is our **design contribution**. We do not claim to have invented pulse sensing, Wi-Fi networking, or navigational algorithms.
+
+## Prototype features and evidence
+
+| Feature | Current evidence / status | Important boundary |
+| --- | --- | --- |
+| Sensor telemetry and dashboard | Real ESP32-to-Pi telemetry was observed; API and dashboard were tested. | Optical health readings are estimates, not medical-grade measurements. |
+| Sensor quality assessment | Backend and frontend test scenarios cover low signal, motion, missing readings, stale timestamps, and link loss. | Thresholds are demonstrative, not clinical standards. |
+| HADSE | Rule-based states and reasons implemented; automated tests are included in the repository. | No trained AI health model; no diagnosis. |
+| Personal baseline | Consent-gated recording and per-channel baseline comparison implemented. | Deviation flags are **unverified candidates**, not confirmed health anomalies. |
+| Local communication | AstroHotspot is operational in the prototype; the team demonstrated two-way voice communication. | No space-environment testing or quantified Mars-range claims. |
+| AstroNav | Relative-heading/step-based logic, A/B/C schematic paths, and return-to-base workflow implemented and software-tested. | No reliable absolute positioning, obstacle avoidance, or real Mars terrain integration. |
+| Mission Black Box | Local event and assessment logging implemented. | Private records are not published in this repository. |
+
+A separate [verification record](docs/VERIFICATION.md) documents the **November 14 baseline tests** and their precise scope. Later navigation and audio changes are described in the accompanying source and documentation. We intentionally do not present software tests as proof of flight-ready hardware.
+
+### The 10-meter demonstration is not a project limitation
+
+Our live AstroNav demonstration creates a goal **10 meters** ahead of the starting direction because it is practical to show in a room or test area. It is a **controlled demo configuration**. The long-term concept is terrain-aware navigation using genuine Martian mapping and elevation resources; **that integration has not yet been implemented or validated**.
+
+## Hardware / Bill of Materials
+
+The following are the main parts used in or planned around the prototype's assembled configuration. Exact component variants and the audio/power circuit should be checked against the physical build before replication.
+
+| Component | Qty. | Function |
+| --- | ---: | --- |
+| **Arduino Nano ESP32** | 1 | Wearable controller, sensor acquisition, local Wi-Fi link |
+| **Raspberry Pi** | 1 | Wi-Fi access point, local FastAPI backend, audio relay, and dashboard host |
+| **MAX30102 optical pulse sensor** | 1 | Heart rate and estimated SpO₂ acquisition |
+| **MPU6050 IMU** | 1 | Acceleration and movement measurements |
+| **HMC5883L/QMC5883-compatible magnetometer** | 1 | Magnetic heading measurements |
+| **BMP180** | 1 | Barometric pressure and temperature |
+| **0.96-inch SSD1306 OLED display** | 1 | Wearable readings and direction prompts |
+| **Analog microphone / audio input** | 1 | Wearable-side voice input |
+| **Speaker + suitable output circuit** | 1 set | Wearable-side voice playback |
+| **Button or touch input** | As fitted | On-device interaction |
+| **Wearable enclosure and strap** | 1 set | Physical mounting and wearing |
+| **Power, USB cables, wiring and connectors** | As needed | Power and prototyping |
+| **Laptop or other client device** | 1 | Operator dashboard and microphone interface |
+
+**Note:** nRF24 modules were explored during development, but the demonstrated **AstroHotspot** telemetry/voice network is Wi-Fi-based and does not require nRF24 hardware. Parts combined into a multi-sensor module should not be counted as separate physical boards when reproducing the build.
+
+## Software stack
+
+- **Wearable:** Arduino C/C++ on Arduino Nano ESP32
+- **Backend:** Python, FastAPI, Pydantic, asynchronous WebSocket audio bridge
+- **Dashboard:** React, TypeScript, Vite
+- **Storage:** SQLite for mission events; optional local CSV for consent-based calibration
+- **Deployment:** Raspberry Pi OS/Linux, local access point, systemd services
+- **Development:** Visual Studio Code, GitHub, Figma; AI-assisted coding, debugging, editing, and documentation tools
+
+### Repository map
+
+```text
+backend/                 FastAPI, telemetry, HADSE, calibration, AstroNav, audio bridge, tests
+frontend/                Mission-control UI, maps, status displays, radio controls, tests
+deploy/raspberry-pi/      Service units and startup scripts
+docs/                    Deployment, validation, radio and calibration notes
+tools/                   Local development and operator utilities
+```
+
+The live ESP32 firmware, complete wiring diagram, and enclosure design may be stored outside this repository. Please do not assume they are published here unless corresponding files are available.
+
+## Reproduce the software
+
+You can run the backend and dashboard on a development computer **without physical sensors**, using the included simulation/test paths. Measured and simulated packets remain explicitly distinguished.
+
+**Requirements:** Python 3.11+ and Node.js 22+.
+
+```bash
+# Terminal 1: backend
 cd backend
 python -m venv .venv
-# Activate the virtual environment for your shell.
+# Activate .venv (Windows or Linux/macOS)
 python -m pip install -e ".[dev]"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-**Frontend** (terminal 2):
-
-```sh
+```bash
+# Terminal 2: dashboard
 cd frontend
 npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`. The frontend defaults to calling the backend on port `8000` at the same hostname; override with `VITE_API_BASE` when needed.
+Open **http://127.0.0.1:5173**. The API runs on port **8000**. The Raspberry Pi deployment uses the same services over its configured local network; see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-## Tests
+**Run tests:**
 
-```sh
+```bash
 cd backend && python -m pytest -q
 cd ../frontend && npm test && npm run build
 ```
 
-See [deployment instructions](docs/DEPLOYMENT.md) for the Raspberry Pi layout and [verification notes](docs/VERIFICATION.md) for the observed M03 results and limitations.
+For radio configuration and browser microphone permissions, see [`docs/LIVE_AUDIO.md`](docs/LIVE_AUDIO.md). For consent, calibration controls, and privacy, see [`docs/HADSE_CALIBRATION.md`](docs/HADSE_CALIBRATION.md).
 
-## Data and security
+## NASA research and challenge relevance
 
-Do not commit SSH keys, device credentials, `.env` files, real telemetry data, SQLite databases, local virtual environments, or `node_modules`. The hotspot credentials and SSH settings are configured separately on each device. Source labels are important: the dashboard must not label synthetic packets as measured astronaut data.
+AstroVital X responds to **[Create Health Monitoring Software for Astronauts on Space Missions](https://www.spaceappschallenge.org/2026/challenges/health-monitoring-software/)**, which asks for software that gathers health indicators and helps crew members evaluate and act on health status during long-duration missions.
 
-## Status
+Our direct response is the **telemetry → quality check → explainable HADSE assessment → operator communication** workflow. The local radio and experimental navigation functions support that core workflow during an EVA; they are not substitutes for health monitoring.
 
-The source was deployed and checked over Raspberry Pi Ethernet. Backend and frontend services were active and enabled at verification time; both HTTP endpoints and the M03 scenarios passed. A separate end-to-end test using a physical ESP32 and an independent phone client was **not** performed.
+NASA Human Research Program resources informed the choice to prioritize astronaut well-being and local operational independence:
 
+| NASA resource | How we used it |
+| --- | --- |
+| [Five Hazards of Human Spaceflight](https://www.nasa.gov/hrp/hazards/) | Scientific context for health-related challenges, hostile environments, and distance from Earth. |
+| [Risks of Human Spaceflight](https://www.nasa.gov/hrp/risks/) | Background for why physiological indicators and human review matter in mission planning. |
+| [Ongoing Human Research Program Research](https://www.nasa.gov/hrp/ongoing-hrp-research/) | Broader context for continued astronaut health research and monitoring needs. |
 
-## November 14, 2026 dashboard release
+**Source transparency:** These NASA publications were used as **research and design references**, not as an onboard NASA dataset or as training data for HADSE. We have **not** integrated NASA Mars elevation datasets into AstroNav. The team has not claimed NASA review, endorsement, or flight qualification.
 
-The browser dashboard has been updated to follow the AstroVital X Figma design reference (overview layout, dark mission-control styling, four telemetry metrics, trend chart, HADSE and self-check sections). Existing backend integration, self-check submission, event history, sensor quality rules and the simulator remain available.
+## Limitations and next steps
 
-The dashboard uses the browser hostname to locate the API on port `8000`, making the same build usable over a Raspberry Pi hotspot (`192.168.4.1`) or Ethernet (`192.168.10.1`). At the time of that historical release, navigation and Earth-link mockups were labeled **DEMO**; later AstroNav updates added live heading-and-step relative navigation without GPS. No unsupported clinical or hardware capabilities are claimed.
+**Limitations of the current prototype:**
 
-The API connectivity indicator is now resilient to transient polling failures. Requests are not overlapped, optional event history is fetched every six seconds, a failed optional endpoint cannot declare the API offline, and three consecutive fully failed polls are required before marking a previously connected API offline. Mission refresh delays retain last-known data and are indicated separately.
+- Personal pulse/SpO₂ readings have not been clinically validated; HADSE rules are non-diagnostic research logic.
+- The system does not measure space radiation or directly detect the full range of spaceflight health risks.
+- Local Wi-Fi coverage and audio behavior have not been qualified for Mars, EVA suits, radiation exposure, or spaceflight conditions.
+- AstroNav uses relative estimates, not verified position fixes or safe Martian route planning.
+- Local-network radio uses a development-oriented WebSocket transport; production deployment would require authenticated, encrypted communication and comprehensive safety testing.
 
-Run `cd frontend && npm test && npm run build` to execute **16 frontend tests** and the production build (verified on November 14, 2026). The tested Raspberry Pi deployment uses prebuilt static frontend files; compiled assets, device credentials and runtime databases are not committed.
+**Next experiments:**
 
-**Validation scope:** The updated frontend was tested with a real Raspberry Pi API and simulated network-block scenarios. Physical ESP32 telemetry had been observed reaching the Pi, but that does not constitute medical validation, and pixel-perfect parity for every Figma page was not independently verified.
+1. Quantify wearable sensor quality and false-warning behavior under controlled motion and placement conditions.
+2. Measure local-network coverage, latency, packet loss, and simultaneous audio/telemetry performance.
+3. Evaluate AstroNav estimation error against measured walking distances and headings.
+4. Explore real Mars terrain/elevation resources for future route planning, without misrepresenting them as already integrated.
 
-## November 14, 2026 environmental telemetry and HADSE calibration
+## Team MarsUp
 
-The Raspberry Pi API now accepts BMP180 temperature, pressure and barometric altitude, plus magnetometer and compass telemetry. The dashboard displays measurements with source, freshness and compass-calibration indications; missing readings are not fabricated. The API service and ESP32 stream indicators are independent, so device clock skew does not falsely mark an accessible API offline.
+- **Kağan Küçükçongar** — Computer Engineering, Sivas Cumhuriyet University
+- **Mustafa Ahmet Koruç** — Electrical and Electronics Engineering, Sivas University of Science and Technology
+- **Ahmet Ulaş Çabuk** — Electrical and Electronics Engineering, Sivas University of Science and Technology
 
-The HADSE page adds an **opt-in CSV calibration session**. A consenting participant's measured (never simulated) packets may be recorded to a local, access-restricted CSV. The first 20 quality-accepted readings establish per-channel personal baselines. Subsequent repeated deviations yield explainable, **unverified anomaly candidates** and suggestions to recheck readings or obtain human review. This is a rule-based research prototype, **not trained ML or a clinically validated diagnosis system**. The existing HADSE quality gate is unchanged. All CSV files, local database records, credentials and deployment backups are excluded from version control.
+**Recognition:** 4th place in the Sivas local event of NASA Space Apps Challenge 2026; selected as a **Global Nominee** for global judging. *Global Nominee does not mean Global Finalist or Global Award winner.*
 
-Read [the calibration guide](docs/HADSE_CALIBRATION.md) for consent, operating instructions, limitations and the optional local CSV transfer helper. The backend calibration module was exercised with isolated unit tests; the frontend has 21 passing tests and its production build was verified. The active calibration session remains off until explicitly started.
+## Attribution, AI assistance, and privacy
 
-## Live radio and microphone permission panel
+The team used **ChatGPT, Codex, and Claude Code** for assistance with coding, debugging, troubleshooting, documentation, and English-language editing. The system's architecture, prototype integration, demonstrations, and testing were directed and carried out by the team. AI-assisted code is disclosed here; **HADSE does not run a trained AI model**.
 
-Added two-way 8 kHz PCM WebSocket audio bridge between ESP32 and Raspberry Pi, VU meter and push-to-talk (PTT) in the dashboard, as well as explicit user microphone permission control. See [Live Radio Guide](docs/LIVE_AUDIO.md) for details, restrictions and secure local Chrome shortcut installation. The quality of the physical audio hardware has not yet been verified.
+This project should be evaluated using its actual software and prototype evidence. Simulated sensor readings are explicitly labeled. No AI-generated images, video, or audio are included in this README. If such materials are added to the submission, they must be labeled according to NASA Space Apps requirements.
 
+Do not publish Wi-Fi passwords, SSH keys, API/operator tokens, `.env` files, private participant measurements, calibration CSVs, or runtime databases. This prototype is intended for **research and demonstration**, not clinical treatment or safety-critical flight use.
 
-## November 15, 2026: English interface and operator controls
+---
 
-The React dashboard, AstroNav map, voice communication panel, simulation labels, status messages, HTML metadata, README, and technical guides use English. The frontend retains the same API field names and endpoint paths, so the wire protocol does not change when the UI language changes.
-
-The live AstroNav prototype uses a calibrated magnetic heading and estimated step length. Its 10 m target and return-to-base directions are **relative estimates, not GPS coordinates or verified safe routes**. Three route drawings are schematic only. Magnetic north is not corrected to geographic true north.
-
-CSV calibration start/stop controls still require informed participant consent. Ethernet operator access remains supported. For AstroHotspot operation, the backend checks a private server-side operator token; the token must never be stored in source control or included in frontend assets. During a running mission, a temporary port 8001 bridge can forward these operations to the existing backend without restarting the in-memory AstroNav session. The bridge is deployment-specific and is not a general-purpose authenticated API.
-
-After the changes are safely deployed, run the frontend domain tests (npm test and npm run build) and backend tests (python -m pytest). These tests do not replace physical ESP32, microphone, or Wi-Fi validation.
+**AstroVital X is a student-built prototype exploring a simple principle: when a crew is far from Earth, health information should remain visible, interpretable, and actionable locally.**
