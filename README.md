@@ -112,6 +112,10 @@ The following are the main parts used in or planned around the prototype's assem
 
 **Note:** nRF24 modules were explored during development, but the demonstrated **AstroHotspot** telemetry/voice network is Wi-Fi-based and does not require nRF24 hardware. Parts combined into a multi-sensor module should not be counted as separate physical boards when reproducing the build.
 
+## 3D enclosure and printable parts
+
+The project includes [parametric OpenSCAD sources, 3D-printable STL files, mechanical previews, and assembly notes](hardware/3d/README.md) for V3.3/V3.2 housing iterations and a legacy V3.1 revision. These are **unverified physical prototypes**, not flight-qualified designs.
+
 ## Software stack
 
 - **Wearable:** Arduino C/C++ on Arduino Nano ESP32
